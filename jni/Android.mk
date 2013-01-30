@@ -29,3 +29,10 @@ LOCAL_CFLAGS += -DLIBUSB_DESCRIBE=""
 LOCAL_MODULE:= rtl_tcp_andro
 LOCAL_PRELINK_MODULE:= true
 include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := UsbPermissionHelper
+LOCAL_LDLIBS := -llog
+LOCAL_SRC_FILES := \
+marto_rtl_tcp_andro_tools_UsbPermissionHelper.c
+include $(BUILD_SHARED_LIBRARY)

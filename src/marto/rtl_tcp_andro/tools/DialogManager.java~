@@ -1,0 +1,180 @@
+package marto.rtl_tcp_andro.tools;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+
+import marto.rtl_tcp_andro.DeviceOpenActivity;
+import marto.rtl_tcp_andro.R;
+import marto.rtl_tcp_andro.tools.RtlTcpStartException.err_info;
+import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import android.os.Bundle;
+import android.support.v4.app.DialogFragment;
+import android.text.Html;
+import android.text.method.LinkMovementMethod;
+import android.widget.TextView;
+
+/**
+ * Creates various dialogs
+ * 
+ * @author martinmarinov
+ *
+ */
+public class DialogManager extends DialogFragment {
+	
+	/** List of possible dialogs to create */
+	public enum dialogs {
+		DIAG_LIST_USB,
+		DIAG_ABOUT,
+		DIAG_LICENSE
+	}
+	
+	public static DialogFragment invokeDialog(final dialogs id, final String ... args) {
+		final Bundle b = new Bundle();
+		
+		b.putInt("elements", args.length);
+		for (int i = 0; i < args.length; i++) b.putString("e"+i, args[i].toString());
+		
+		b.putInt("id", id.ordinal());
+		
+		final DialogManager dmg = new DialogManager();
+		dmg.setArguments(b);
+		
+		return dmg;
+	}
+	
+	@Override
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
+		final Bundle b = getArguments();
+		final int elements = b.getInt("elements");
+		final String[] args = new String[elements];
+		for (int i = 0; i < elements; i++) args[i] = b.getString("e"+i);		
+		final dialogs id = dialogs.values()[b.getInt("id")];
+		
+		return createDialog(id, args);
+	}
+	
+	/**
+	 * Add new dialogs here!
+	 * @param id
+	 * @param args
+	 * @return
+	 */
+	private Dialog createDialog(final dialogs id, final String[] args) {
+		switch (id) {
+		case DIAG_LIST_USB:
+			return genUSBDeviceDialog();
+		case DIAG_ABOUT:
+			final AlertDialog addd = new AlertDialog.Builder(getActivity())
+			.setTitle(R.string.help)
+			.setPositiveButton(R.string.btn_ok, new DialogInterface.OnClickListener() {
+				@Override
+				public void onClick(DialogInterface dialog, int which) {
+					dialog.dismiss();
+				}
+			})
+			.setMessage(Html.fromHtml(getString(R.string.help_info))).create();
+			try {
+				addd.setOnShowListener(new DialogInterface.OnShowListener() {
+					
+					@Override
+					public void onShow(DialogInterface paramDialogInterface) {
+						try {
+							final TextView tv = (TextView) addd.getWindow().findViewById(android.R.id.message);
+							if (tv != null) tv.setMovementMethod(LinkMovementMethod.getInstance());
+							
+						} catch (Exception e) {}
+					}
+				});
+			} catch (Exception e) {}
+			
+			return addd;
+		case DIAG_LICENSE:
+			return new AlertDialog.Builder(getActivity())
+			.setTitle("COPYING")
+			.setPositiveButton(R.string.btn_ok, new DialogInterface.OnClickListener() {
+				@Override
+				public void onClick(DialogInterface dialog, int which) {
+					dialog.dismiss();
+				}
+			})
+			.setMessage(readWholeStream("COPYING"))
+			.create();
+		}
+		return null;
+	}
+	
+	private String readWholeStream(final String asset_name) {
+		
+		final StringBuilder total = new StringBuilder();
+		
+		try {
+			final InputStream in = getActivity().getAssets().open(asset_name);
+			final BufferedReader r = new BufferedReader(new InputStreamReader(in));
+			
+			String line;
+			while ((line = r.readLine()) != null) {
+			    total.append(line);
+			    total.append("\n");
+			}
+			in.close();
+		} catch (IOException e) {}
+		
+		return total.toString(); 
+	}
+	
+	@SuppressLint("NewApi")
+	private Dialog genUSBDeviceDialog() {
+		try {
+			final UsbManager manager = (UsbManager) getActivity().getSystemService(Context.USB_SERVICE);
+			final HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
+			final String[] options = new String[deviceList.size()+1];
+			final String rootmode_string = StrRes.get(R.string.use_root);
+			int i = 0;
+			for (final String s : deviceList.keySet())
+				options[i++] = s;
+			options[i] = rootmode_string;
+			
+			return new AlertDialog.Builder(getActivity())
+					.setItems(options, new DialogInterface.OnClickListener() {
+						
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+							if (getActivity() instanceof DeviceOpenActivity) {
+								final DeviceOpenActivity sdrviewer = (DeviceOpenActivity) getActivity();
+								final String selected = options[which];
+								
+								final UsbDevice selected_device = deviceList.get(selected);
+								final boolean rootmode = selected.equals(rootmode_string);
+								
+								if (rootmode)
+									sdrviewer.openDevice();
+								else
+									sdrviewer.openDevice(selected_device);
+							}
+						}
+					})
+					.setOnCancelListener(new AlertDialog.OnCancelListener() {
+						
+						@Override
+						public void onCancel(DialogInterface dialog) {
+							final DeviceOpenActivity sdrviewer = (DeviceOpenActivity) getActivity();
+							sdrviewer.finishWithError(err_info.no_devices_found);
+						}
+					})
+					.setTitle(R.string.choose_device)
+					.create();
+		} catch (Throwable t) {
+			t.printStackTrace();
+			return null;
+		}
+	}
+}

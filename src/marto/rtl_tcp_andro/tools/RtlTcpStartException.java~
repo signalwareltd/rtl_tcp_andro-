@@ -1,0 +1,24 @@
+package marto.rtl_tcp_andro.tools;
+
+public class RtlTcpStartException extends Exception {
+
+	public enum err_info {
+		permission_denied,
+		root_required,
+		no_devices_found,
+		unknown_error,
+		replug
+	}
+	
+	private static final long serialVersionUID = -2093258176426113336L;
+
+	private final err_info err;
+	public RtlTcpStartException(final err_info err) {
+		this.err = err;
+	}
+	
+	public err_info getReason() {
+		return err;
+	}
+
+}
