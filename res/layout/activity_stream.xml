@@ -63,6 +63,16 @@
                 android:layout_alignParentTop="true"
                 android:textOff="@string/stream"
                 android:textOn="@string/kill" />
+
+            <CheckBox
+                android:id="@+id/forceRoot"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@+id/help"
+                android:layout_alignBottom="@+id/help"
+                android:layout_toRightOf="@+id/onoff"
+                android:text="@string/force_root" />
+
         </RelativeLayout>
     </LinearLayout>
 

@@ -13,6 +13,7 @@
 	<string name="copy">Copy</string>
 	<string name="copied_to_clip">Output was copied to clipboard</string>
 	<string name="clear">Clear</string>
+	<string name="force_root">Force root</string>
 	
 	<string name="use_root">Use root access</string>
 	<string name="choose_device">Device Chooser</string>

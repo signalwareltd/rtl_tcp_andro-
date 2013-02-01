@@ -15,17 +15,18 @@ public final class R {
     }
     public static final class id {
         public static final int RelativeLayout1=0x7f070003;
-        public static final int ScrollArea=0x7f070007;
+        public static final int ScrollArea=0x7f070008;
         public static final int binaryname=0x7f070001;
-        public static final int clearbutton=0x7f07000b;
+        public static final int clearbutton=0x7f07000c;
         public static final int commandline=0x7f070002;
-        public static final int copybutton=0x7f07000a;
-        public static final int footer=0x7f070008;
+        public static final int copybutton=0x7f07000b;
+        public static final int footer=0x7f070009;
+        public static final int forceRoot=0x7f070007;
         public static final int guielements=0x7f070000;
         public static final int help=0x7f070005;
         public static final int license=0x7f070004;
         public static final int onoff=0x7f070006;
-        public static final int terminal=0x7f070009;
+        public static final int terminal=0x7f07000a;
     }
     public static final class layout {
         public static final int activity_stream=0x7f030000;
@@ -34,22 +35,23 @@ public final class R {
     public static final class string {
         public static final int app_name=0x7f050000;
         public static final int args_hint=0x7f050007;
-        public static final int btn_ok=0x7f050010;
-        public static final int choose_device=0x7f05000d;
+        public static final int btn_ok=0x7f050011;
+        public static final int choose_device=0x7f05000e;
         public static final int clear=0x7f05000b;
         public static final int copied_to_clip=0x7f05000a;
         public static final int copy=0x7f050009;
         public static final int default_args=0x7f050008;
+        public static final int force_root=0x7f05000c;
         public static final int help=0x7f050004;
-        public static final int help_info=0x7f050011;
+        public static final int help_info=0x7f050012;
         public static final int kill=0x7f050006;
         public static final int license=0x7f050003;
-        public static final int notif_message=0x7f05000f;
-        public static final int notif_title=0x7f05000e;
+        public static final int notif_message=0x7f050010;
+        public static final int notif_title=0x7f05000f;
         public static final int quickinfo=0x7f050002;
         public static final int rtl_tcp_andro_exec=0x7f050001;
         public static final int stream=0x7f050005;
-        public static final int use_root=0x7f05000c;
+        public static final int use_root=0x7f05000d;
     }
     public static final class style {
         /** 
