@@ -19,6 +19,7 @@
 
 package marto.rtl_tcp_andro.tools;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.HashMap;
@@ -149,6 +150,24 @@ public class UsbPermissionHelper {
 		return ans;
 	}
 	
+	private static void chmodRecursive(final String dir, final OutputStreamWriter osw) throws IOException {
+		osw.write("chmod 777 "+dir+"\n");
+		osw.flush();
+		
+		final String[] files = new File(dir).list();
+		for (final String s : files) {
+			final String fname = dir + s; 
+			final File f = new File(fname);
+			
+			if (f.isDirectory())
+				chmodRecursive(fname+"/", osw);
+			else {
+				osw.write("chmod 777 "+fname+"\n");
+				osw.flush();
+			}
+		}
+	}
+	
 	private static void fixRootPermissions(final DeviceOpenActivity activity) throws RtlTcpStartException {
 		Runtime runtime = Runtime.getRuntime();
 		OutputStreamWriter osw = null;
@@ -158,8 +177,9 @@ public class UsbPermissionHelper {
 			proc = runtime.exec("su");
 			
 			osw = new OutputStreamWriter(proc.getOutputStream());
-			osw.write("chmod -R 777 /dev/bus/usb/");
-			osw.flush();
+			
+			chmodRecursive("/dev/bus/usb/", osw);
+			
 			osw.close();
 
 		} catch (IOException ex) {

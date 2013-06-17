@@ -35,5 +35,8 @@
 		<p>For detailed information about the license, use the License button.</p>
 
 	]]></string>
-    
+	
+	<string name="warn_txt">The driver has been installed successfully! Please, launch your host application and it will trigger the driver automatically.</string>
+    <string name="enable_gui">Enable advanced mode (for debug &amp; stream to PC)</string>
+	
 </resources>

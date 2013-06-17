@@ -55,7 +55,7 @@ public class StreamActivity extends FragmentActivity implements OnServiceTalkCal
 	private ToggleButton onoff;
 	private CheckBox forceroot;
 	private SharedPreferences prefs;
-	
+
 	private static final int START_REQ_CODE = 1;
 	
 	@Override
@@ -67,6 +67,15 @@ public class StreamActivity extends FragmentActivity implements OnServiceTalkCal
 		terminal = (TextView) findViewById(R.id.terminal);
 		scroll = (ScrollView) findViewById(R.id.ScrollArea);
 		arguments = (EditText) findViewById(R.id.commandline);
+		
+		((Button) findViewById(R.id.enable_gui)).setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				findViewById(R.id.statusmsg).setVisibility(View.GONE);
+				findViewById(R.id.gui).setVisibility(View.VISIBLE);
+			}
+		});
 		
 		
 		(forceroot = (CheckBox) findViewById(R.id.forceRoot)).setOnCheckedChangeListener(new CheckBox.OnCheckedChangeListener() {
