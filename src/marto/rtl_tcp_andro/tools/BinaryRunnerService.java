@@ -30,12 +30,16 @@ import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.hardware.usb.UsbDeviceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.PowerManager;
 
 public class BinaryRunnerService extends Service {
+	
+	private static final String TAG = "rtl_tcp_andro";
 	
 	public static BinaryRunnerService lastservice = null;
 	public static Object usbconnection = null; // the usb device that is open, try to close it actually when the service dies
@@ -45,6 +49,7 @@ public class BinaryRunnerService extends Service {
 	public static ProcessRunner pr = null;
 	private final static StringBuilder log = new StringBuilder();
 	private int startid;
+	private PowerManager.WakeLock wl = null;
 	
 	@Override
 	public IBinder onBind(Intent arg0) {
@@ -67,13 +72,27 @@ public class BinaryRunnerService extends Service {
 
 		final String exename = data.getString("exe");
 		final String args = data.getString("args");
+		final boolean root = data.getBoolean("root");
 
 		try {
 
 			// close any previous attempts and try to reopen
 			if (pr != null)
-				pr.stop();
+				pr.stop(getApplicationContext());
 
+			try {
+				wl = null;
+				wl = ((PowerManager)getSystemService(
+						Context.POWER_SERVICE)).newWakeLock(
+								PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+								| PowerManager.ON_AFTER_RELEASE,
+								TAG);
+				wl.acquire();
+				log("Ackquired wake lock. Will keep the screen on.");
+			} catch (Throwable e) {e.printStackTrace();}
+
+			if (root)
+				log("#su");
 			log("#"+exename+" "+args);
 
 			pr = new ProcessRunner(
@@ -95,7 +114,7 @@ public class BinaryRunnerService extends Service {
 							log.append("exit "+exitvalue);
 							stopSelf(startId);
 						}
-					});
+					}, root);
 			for (final OnProcessSaidWord cb : wordcallbacks.keySet()) pr.registerWordCallback(cb, wordcallbacks.get(cb));
 			pr.registerWordCallback(new OnProcessSaidWord() {
 				
@@ -105,7 +124,9 @@ public class BinaryRunnerService extends Service {
 				}
 				
 				@Override
-				public void OnClosed(int exitvalue) {}
+				public void OnClosed(int exitvalue) {
+					stopSelf(startId);
+				}
 			}, "exiting");
 			
 			pr.start();
@@ -151,11 +172,16 @@ public class BinaryRunnerService extends Service {
 	@Override
 	public void onDestroy() {
 		if (pr != null)
-			pr.stop();
+			pr.stop(getApplicationContext());
 		
 		try {
 			final UsbDeviceConnection conn = (UsbDeviceConnection) usbconnection;
 			conn.close();
+		} catch (Throwable t) {};
+		
+		try {
+			wl.release();
+			log("Wake lock released.");
 		} catch (Throwable t) {};
 		
 		lastservice = null;

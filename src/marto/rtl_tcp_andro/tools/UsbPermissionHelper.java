@@ -70,7 +70,8 @@ public class UsbPermissionHelper {
 		}
 
 		try {
-			fixRootPermissions(ctx);
+			ctx.openDeviceUsingRoot();
+			//depricated TODO! fixRootPermissions(ctx);
 			return;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -168,42 +169,43 @@ public class UsbPermissionHelper {
 		}
 	}
 	
-	private static void fixRootPermissions(final DeviceOpenActivity activity) throws RtlTcpStartException {
-		Runtime runtime = Runtime.getRuntime();
-		OutputStreamWriter osw = null;
-		Process proc = null;
-		try { // Run Script
-
-			proc = runtime.exec("su");
-			
-			osw = new OutputStreamWriter(proc.getOutputStream());
-			
-			chmodRecursive("/dev/bus/usb/", osw);
-			
-			osw.close();
-
-		} catch (IOException ex) {
-			throw new RtlTcpStartException(err_info.root_required);
-		} finally {
-			if (osw != null) {
-				try {
-					osw.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-		try {
-			if (proc != null)
-				proc.waitFor();
-		} catch (InterruptedException e) {}
-		
-		if (proc.exitValue() != 0)
-			throw new RtlTcpStartException(err_info.permission_denied);
-		
-		activity.openDevice();
-
-	}
+// DEPRICATED TODO! REMOVE
+//	private static void fixRootPermissions(final DeviceOpenActivity activity) throws RtlTcpStartException {
+//		Runtime runtime = Runtime.getRuntime();
+//		OutputStreamWriter osw = null;
+//		Process proc = null;
+//		try { // Run Script
+//
+//			proc = runtime.exec("su");
+//			
+//			osw = new OutputStreamWriter(proc.getOutputStream());
+//			
+//			chmodRecursive("/dev/bus/usb/", osw);
+//			
+//			osw.close();
+//
+//		} catch (IOException ex) {
+//			throw new RtlTcpStartException(err_info.root_required);
+//		} finally {
+//			if (osw != null) {
+//				try {
+//					osw.close();
+//				} catch (IOException e) {
+//					e.printStackTrace();
+//				}
+//			}
+//		}
+//		try {
+//			if (proc != null)
+//				proc.waitFor();
+//		} catch (InterruptedException e) {}
+//		
+//		if (proc.exitValue() != 0)
+//			throw new RtlTcpStartException(err_info.permission_denied);
+//		
+//		activity.openDevice();
+//
+//	}
 
 	
 	public static native void native_startUnixSocketServer(final String address, int fd);

@@ -26,7 +26,8 @@ public class RtlTcpStartException extends Exception {
 		root_required,
 		no_devices_found,
 		unknown_error,
-		replug
+		replug,
+		already_running
 	}
 	
 	private static final long serialVersionUID = -2093258176426113336L;

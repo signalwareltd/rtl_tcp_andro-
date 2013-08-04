@@ -142,14 +142,15 @@ sighandler(int signum)
 #else
 static void sighandler(int signum)
 {
-        fprintf(stderr, "Signal caught, exiting!\n");
-        if (!do_exit) {
+	printf("Closing socket due to signal '%d'! (from stdout)\n", signum);
+	fprintf(stderr, "Closing socket due to signal '%d'! (from stderr)\n", signum);
+
       rtlsdr_cancel_async(dev);
       rtlsdr_close(dev);
       closesocket(listensocket);
       closesocket(s);
       exit(0);
-    }
+
 }
 #endif
 
@@ -696,7 +697,7 @@ int main(int argc, char **argv)
         setsockopt(s, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
 
         printf("client accepted!\n");
-        printf(stderr, "client accepted!\n");
+        fprintf(stderr, "client accepted!\n");
         //LOGI("rtl_tcp accepted a client!");
 
         memset(&dongle_info, 0, sizeof(dongle_info));
@@ -748,11 +749,13 @@ int main(int argc, char **argv)
 
 out:
         rtlsdr_close(dev);
+        printf("Closing socket from 'out'! (from stdout)\n");
+        fprintf(stderr, "Closing socket from 'out'! (from stderr)\n");
         closesocket(listensocket);
         closesocket(s);
         #ifdef _WIN32
         WSACleanup();
         #endif
-        printf("bye!\n");
+
         return r >= 0 ? r : -r;
 }

@@ -44,11 +44,14 @@ import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentTransaction;
+import android.util.Log;
 
 import static marto.rtl_tcp_andro.StreamActivity.DISABLE_JAVA_FIX_PREF;
 import static marto.rtl_tcp_andro.StreamActivity.PREFS_NAME;
 
 public class DeviceOpenActivity extends FragmentActivity implements OnProcessSaidWord {
+	
+	private final static String TAG = "rtl_tcp_andro";
 	
 	public static Intent intent = null;
 	private static DeviceOpenActivity mostrecent_activity = null;
@@ -92,6 +95,14 @@ public class DeviceOpenActivity extends FragmentActivity implements OnProcessSai
 	@Override
 	protected void onStart() {
 		super.onStart();
+		
+		if (BinaryRunnerService.lastservice != null) {
+			BinaryRunnerService.lastservice.stopSelf();
+			try {Thread.sleep(50);} catch (Throwable e) {};
+		}
+		
+		if (BinaryRunnerService.lastservice != null)
+			finishWithError(err_info.already_running);
 		
 		try {
 			permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent("com.android.example.USB_PERMISSION"), 0);
@@ -182,31 +193,35 @@ public class DeviceOpenActivity extends FragmentActivity implements OnProcessSai
 			finishWithError(err_info.permission_denied);
 
 		final UsbDeviceConnection connection = manager.openDevice(device); 
+		
+		if (connection == null)
+			finishWithError(err_info.unknown_error);
 
 		final String address = getFilesDir().getAbsolutePath()+"/socket";
 		UsbPermissionHelper.native_startUnixSocketServer(address, connection.getFileDescriptor());
 
 		BinaryRunnerService.usbconnection = connection;
-		startBinary(arguments + " -h "+address);	
+		startBinary(arguments + " -h "+address, false);	
 	}
 	
 	/**
 	 * Initializes open procedure without passing fds to libusb
 	 */
-	public void openDevice() {
+	public void openDeviceUsingRoot() {
 		android.util.Log.d("rtl_tcp_andro", "Opening with root!");
-		startBinary(arguments);
+		startBinary(arguments, true);
 	}
 	
 	/** 
 	 * Starts the tcp binary
 	 */
-	public void startBinary(final String arguments) {
+	public void startBinary(final String arguments, final boolean root) {
 		try {
 			//start the service
 			final Intent i = new Intent(this, BinaryRunnerService.class);
 			i.putExtra("exe", "rtl_tcp_andro");
 			i.putExtra("args", arguments);
+			i.putExtra("root", root);
 			startService(i);
 			
 		} catch (Exception e) {
@@ -255,6 +270,12 @@ public class DeviceOpenActivity extends FragmentActivity implements OnProcessSai
 		    getParent().setResult(RESULT_OK, data);
 		}
 		finish();
+	}
+	
+	@Override
+	public void finish() {
+		Log.d(TAG, "RTL2832U returning back to caller!");
+		super.finish();
 	}
 
 

@@ -1,4 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
+APP_PLATFORM:= android-8
+APP_ABI:= armeabi armeabi-v7a x86
 
 include $(CLEAR_VARS)
 
@@ -25,7 +27,7 @@ jni/libusb-andro/libusb \
 jni/rtl-sdr/include \
 jni/rtl-sdr/src
 
-LOCAL_CFLAGS += -DLIBUSB_DESCRIBE=""
+LOCAL_CFLAGS += -DLIBUSB_DESCRIBE=""  -O3 
 LOCAL_MODULE:= rtl_tcp_andro
 LOCAL_PRELINK_MODULE:= true
 include $(BUILD_EXECUTABLE)

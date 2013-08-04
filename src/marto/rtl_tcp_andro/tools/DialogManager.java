@@ -175,7 +175,7 @@ public class DialogManager extends DialogFragment {
 								final boolean rootmode = selected.equals(rootmode_string);
 								
 								if (rootmode)
-									sdrviewer.openDevice();
+									sdrviewer.openDeviceUsingRoot();
 								else
 									sdrviewer.openDevice(selected_device);
 							}

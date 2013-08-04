@@ -25,6 +25,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -47,13 +48,15 @@ public class ProcessRunner {
 	private OnProcessTalkCallback callback = null;
 	private final Object locker2 = new Object();
 	private final String executable;
+	private final boolean root;
+	private OutputStreamWriter su_instream;
 	
 	private final HashMap<OnProcessSaidWord, String> wordcallbacks = new HashMap<OnProcessSaidWord, String>();
 
 	private String last_stdout_line = "";
 	
-	public ProcessRunner(final String[] libraries, final String executable, final String arguments, final Context ctx) throws IOException {
-		this(libraries, executable, arguments, ctx, null);
+	public ProcessRunner(final String[] libraries, final String executable, final String arguments, final Context ctx, final boolean root) throws IOException {
+		this(libraries, executable, arguments, ctx, null, root);
 	}
 	
 	/**
@@ -63,8 +66,8 @@ public class ProcessRunner {
 	 * @param argumentss the arguments that would be passed to the executable
 	 * @throws IOException if we can't copy the files to a safe directory
 	 */
-	public ProcessRunner(final String[] libraries, final String executable, final String argumentss, final Context ctx, final OnProcessTalkCallback callback) throws IOException {
-		
+	public ProcessRunner(final String[] libraries, final String executable, final String argumentss, final Context ctx, final OnProcessTalkCallback callback, final boolean root) throws IOException {
+		this.root = root;
 		final String folder = ctx.getFilesDir().getAbsolutePath();
 		
 		for (int i = 0; i < libraries.length; i++) copyFile(libraries[i], folder+"/"+libraries[i], ctx);
@@ -78,7 +81,7 @@ public class ProcessRunner {
 		args = argumentss;
 		
 		this.callback = callback;		
-		this.executable = executable;
+		this.executable = executable.trim();
 	}
 	
 	/**
@@ -101,10 +104,22 @@ public class ProcessRunner {
 				args.add(arg);
 			}
 			
-			final ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
-			// add library dependency handling to pb's environment if you want to use binary with library dependencies!
-			pb.redirectErrorStream(true);
-			process = pb.start();
+			if (root) {
+				final StringBuilder together = new StringBuilder();
+				for (final String s : args) together.append(s+" ");
+				final ProcessBuilder pb = new ProcessBuilder("su");
+				pb.redirectErrorStream(true);
+				process = pb.start();
+				su_instream  = new OutputStreamWriter(process.getOutputStream());
+				su_instream.write(together.toString()+"\n");
+				su_instream.write("exit\n");
+				su_instream.flush();
+			} else {
+				final ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
+				// add library dependency handling to pb's environment if you want to use binary with library dependencies!
+				pb.redirectErrorStream(true);
+				process = pb.start();
+			}
 			
 			startOutputRedirector(process.getInputStream());
 		}
@@ -194,10 +209,23 @@ public class ProcessRunner {
 		} catch (InterruptedException e) {}
 	}
 	
-	public void stop() {
+	public void stop(final Context ctx) {
+		
+		try {
+			if (root) {
+				
+				su_instream.close();
+
+				// NOT CLOSING PROPERLY!!!!!!!!!!!!!!!!!!!!!!
+				runRootCommand("killall -SIGINT "+executable);
+				
+			}
+		} catch (Throwable e) {};
+
 		try {
 			process.destroy();
 		} catch (Throwable e) {};
+	
 	}
 	
 	public static interface OnProcessTalkCallback {
@@ -217,4 +245,24 @@ public class ProcessRunner {
 		void OnClosed(final int exitvalue);
 
 	}
+	
+	private static void runRootCommand(final String command) throws IOException {
+		final ProcessBuilder pb = new ProcessBuilder("su");
+		pb.redirectErrorStream(true);
+		final Process proc = pb.start();
+		final OutputStreamWriter su2 = new OutputStreamWriter(proc.getOutputStream());
+		su2.write(command+"\nexit\n");
+		su2.flush();
+		su2.close();
+		
+		final BufferedReader bri = new BufferedReader
+				(new InputStreamReader(proc.getInputStream()));
+		
+		while (true) {
+			final String line = bri.readLine();
+			if (line == null) break;
+			Log.w(TAG, "su: "+line);
+		}
+	}
+	
 }
