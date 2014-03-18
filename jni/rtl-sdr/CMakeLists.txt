@@ -33,14 +33,26 @@ set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "")
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
+if(NOT LIB_INSTALL_DIR)
+   set(LIB_INSTALL_DIR lib)
+endif()
+
+# Set the version information here
+set(VERSION_INFO_MAJOR_VERSION 0) # increment major on api compatibility changes
+set(VERSION_INFO_MINOR_VERSION 5) # increment minor on feature-level changes
+set(VERSION_INFO_PATCH_VERSION git) # increment patch for bug fixes and docs
+include(Version) # setup version info
+
 ########################################################################
 # Compiler specific setup
 ########################################################################
 if(CMAKE_COMPILER_IS_GNUCC AND NOT WIN32)
     ADD_DEFINITIONS(-Wall)
     ADD_DEFINITIONS(-Wextra)
+    ADD_DEFINITIONS(-Wno-unused-parameter)
     ADD_DEFINITIONS(-Wno-unused)
     ADD_DEFINITIONS(-Wsign-compare)
+    ADD_DEFINITIONS(-Wdeclaration-after-statement)
     #http://gcc.gnu.org/wiki/Visibility
     add_definitions(-fvisibility=hidden)
 endif()
@@ -101,6 +113,14 @@ else (INSTALL_UDEV_RULES)
     message (STATUS "Udev rules not being installed, install them with -DINSTALL_UDEV_RULES=ON")
 endif (INSTALL_UDEV_RULES)
 
+option(DETACH_KERNEL_DRIVER "Detach kernel driver if loaded" OFF)
+if (DETACH_KERNEL_DRIVER)
+    message (STATUS "Building with kernel driver detaching enabled")
+    add_definitions(-DDETACH_KERNEL_DRIVER=1)
+else (DETACH_KERNEL_DRIVER)
+    message (STATUS "Building with kernel driver detaching disabled, use -DDETACH_KERNEL_DRIVER=ON to enable")
+endif (DETACH_KERNEL_DRIVER)
+
 ########################################################################
 # Add subdirectories
 ########################################################################
@@ -130,7 +150,7 @@ ENDIF(CMAKE_CROSSCOMPILING)
 
 set(prefix ${CMAKE_INSTALL_PREFIX})
 set(exec_prefix \${prefix})
-set(libdir \${exec_prefix}/lib)
+set(libdir \${exec_prefix}/${LIB_INSTALL_DIR})
 set(includedir \${prefix}/include)
 
 CONFIGURE_FILE(
@@ -140,5 +160,11 @@ CONFIGURE_FILE(
 
 INSTALL(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/librtlsdr.pc
-    DESTINATION lib/pkgconfig
+    DESTINATION ${LIB_INSTALL_DIR}/pkgconfig
 )
+
+########################################################################
+# Print Summary
+########################################################################
+MESSAGE(STATUS "Building for version: ${VERSION} / ${LIBVER}")
+MESSAGE(STATUS "Using install prefix: ${CMAKE_INSTALL_PREFIX}")

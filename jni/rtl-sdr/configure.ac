@@ -11,6 +11,7 @@ dnl checks for programs
 AC_PROG_MAKE_SET
 AC_PROG_CC
 AC_PROG_INSTALL
+AM_PROG_CC_C_O
 LT_INIT
 AC_PROG_LIBTOOL
 
@@ -42,6 +43,9 @@ AC_CHECK_LIB(m, atan2, [LIBS="$LIBS -lm"])
 dnl libmath (for rtl_adsb)
 AC_CHECK_LIB(m, sqrt, [LIBS="$LIBS -lm"])
 
+dnl libmath (for rtl_power)
+AC_CHECK_LIB(m, atan2, [LIBS="$LIBS -lm"])
+
 dnl librealtime (for rtl_test)
 AC_CHECK_LIB(rt, clock_gettime, [LIBS="$LIBS -lrt"])
 
@@ -58,14 +62,20 @@ AC_SUBST(SYMBOL_VISIBILITY)
 
 AC_MSG_CHECKING(whether compiler understands -Wall)
 old_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS -Wall -Wextra -Wno-unused -Wsign-compare"
+CFLAGS="$CFLAGS -Wall -Wextra -Wno-unused-parameter -Wno-unused -Wsign-compare -Wdeclaration-after-statement"
 AC_TRY_COMPILE([],[],
   AC_MSG_RESULT(yes),
   AC_MSG_RESULT(no)
   CFLAGS="$old_CFLAGS")
 
+AC_ARG_ENABLE(driver-detach,
+[  --enable-driver-detach          Enable detaching of kernel driver (disabled by default)],
+[if test x$enableval = xyes; then
+    CFLAGS="$CFLAGS -DDETACH_KERNEL_DRIVER"
+fi])
+
 dnl Generate the output
-AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADER(config.h)
 
 AC_OUTPUT(
 	librtlsdr.pc

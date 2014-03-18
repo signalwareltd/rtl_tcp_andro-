@@ -19,13 +19,11 @@
 
 package marto.rtl_tcp_andro.tools;
 
-import java.util.HashMap;
 import java.util.LinkedList;
 
 import marto.rtl_tcp_andro.R;
 import marto.rtl_tcp_andro.StreamActivity;
-import marto.rtl_tcp_andro.tools.ProcessRunner.OnProcessSaidWord;
-
+import marto.rtl_tcp_andro.core.RtlTcp;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.PendingIntent;
@@ -41,12 +39,13 @@ public class BinaryRunnerService extends Service {
 	
 	private static final String TAG = "rtl_tcp_andro";
 	
+	private static RtlTcp.OnProcessTalkCallback callback1 = null;
+	private static RtlTcp.OnProcessSaidWord callback2 = null;
+	
 	public static BinaryRunnerService lastservice = null;
 	public static Object usbconnection = null; // the usb device that is open, try to close it actually when the service dies
 
 	private static LinkedList<OnServiceTalkCallback> callbacks = new LinkedList<OnServiceTalkCallback>();
-	private final static HashMap<OnProcessSaidWord, String> wordcallbacks = new HashMap<OnProcessSaidWord, String>();
-	public static ProcessRunner pr = null;
 	private final static StringBuilder log = new StringBuilder();
 	private int startid;
 	private PowerManager.WakeLock wl = null;
@@ -77,8 +76,7 @@ public class BinaryRunnerService extends Service {
 		try {
 
 			// close any previous attempts and try to reopen
-			if (pr != null)
-				pr.stop(getApplicationContext());
+			RtlTcp.stop();
 
 			try {
 				wl = null;
@@ -95,28 +93,26 @@ public class BinaryRunnerService extends Service {
 				log("#su");
 			log("#"+exename+" "+args);
 
-			pr = new ProcessRunner(
-					new String[]{},
-					exename, 
-					args,
-					getApplicationContext(), new ProcessRunner.OnProcessTalkCallback() {
+			RtlTcp.unregisterWordCallback(callback1);
+			RtlTcp.registerWordCallback(callback1 = new RtlTcp.OnProcessTalkCallback() {
 
-						@Override
-						public void OnProcessTalk(final String line) {
-							log(line);
-							log.append(line);
-							log.append("\n");
-						}
+				@Override
+				public void OnProcessTalk(final String line) {
+					log(line);
+					log.append(line);
+					log.append("\n");
+				}
 
-						@Override
-						public void OnClosed(int exitvalue) {
-							for (final OnServiceTalkCallback cb : callbacks) cb.OnClosed(exitvalue);
-							log.append("exit "+exitvalue);
-							stopSelf(startId);
-						}
-					}, root);
-			for (final OnProcessSaidWord cb : wordcallbacks.keySet()) pr.registerWordCallback(cb, wordcallbacks.get(cb));
-			pr.registerWordCallback(new OnProcessSaidWord() {
+				@Override
+				public void OnClosed(int exitvalue) {
+					for (final OnServiceTalkCallback cb : callbacks) cb.OnClosed(exitvalue);
+					log.append("exit "+exitvalue);
+					stopSelf(startId);
+				}
+			});
+			
+			RtlTcp.unregisterWordCallback(callback2);
+			RtlTcp.registerWordCallback(callback2 = new RtlTcp.OnProcessSaidWord() {
 				
 				@Override
 				public void OnProcessSaid(String line) {
@@ -129,7 +125,8 @@ public class BinaryRunnerService extends Service {
 				}
 			}, "exiting");
 			
-			pr.start();
+			// TODO! GAIN ROOT HERE if root
+			RtlTcp.start(args);
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -158,21 +155,10 @@ public class BinaryRunnerService extends Service {
 		callbacks.remove(callback);
 	}
 	
-	public static void registerWordCallback(final OnProcessSaidWord callback, final String word) {
-		wordcallbacks.put(callback, word);
-		if (pr != null && pr.isRunning()) pr.registerWordCallback(callback, word);
-	}
-	
-	public static void unregisterWordCallback(final OnProcessSaidWord callback) {
-		wordcallbacks.remove(callback);
-		if (pr != null && pr.isRunning()) pr.unregisterWordCallback(callback);
-	}
-	
 	@SuppressLint("NewApi")
 	@Override
 	public void onDestroy() {
-		if (pr != null)
-			pr.stop(getApplicationContext());
+		RtlTcp.stop();
 		
 		try {
 			final UsbDeviceConnection conn = (UsbDeviceConnection) usbconnection;
