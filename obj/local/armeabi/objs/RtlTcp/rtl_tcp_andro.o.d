@@ -72,6 +72,8 @@ obj/local/armeabi/objs/RtlTcp/rtl_tcp_andro.o: jni/rtl_tcp_andro.c \
  /home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/pthread.h \
  /home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/time.h \
  /home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/sched.h \
+ jni/RtlTcp.h \
+ /home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/jni.h \
  jni/rtl_tcp_andro.h jni/librtlsdr_andro.h jni/rtl-sdr/include/rtl-sdr.h \
  jni/rtl-sdr/include/rtl-sdr_export.h \
  jni/rtl-sdr/src/convenience/convenience.h
@@ -221,6 +223,10 @@ obj/local/armeabi/objs/RtlTcp/rtl_tcp_andro.o: jni/rtl_tcp_andro.c \
 /home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/time.h:
 
 /home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/sched.h:
+
+jni/RtlTcp.h:
+
+/home/martinmarinov/android-ndk-r9/platforms/android-9/arch-arm/usr/include/jni.h:
 
 jni/rtl_tcp_andro.h:
 

@@ -20,7 +20,7 @@
 #ifndef RTL_TCP_ANDRO_H_
 #define RTL_TCP_ANDRO_H_
 
-int rtltcp_main(int argc, char **argv);
+void rtltcp_main(int argc, char **argv);
 void rtltcp_close();
 
 

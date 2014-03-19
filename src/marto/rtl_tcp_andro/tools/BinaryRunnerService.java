@@ -19,35 +19,37 @@
 
 package marto.rtl_tcp_andro.tools;
 
-import java.util.LinkedList;
-
 import marto.rtl_tcp_andro.R;
 import marto.rtl_tcp_andro.StreamActivity;
 import marto.rtl_tcp_andro.core.RtlTcp;
+import marto.rtl_tcp_andro.core.RtlTcpException;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.hardware.usb.UsbDeviceConnection;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
 import android.os.PowerManager;
+import android.os.Process;
 
 public class BinaryRunnerService extends Service {
 	
+	private static final int MSG_START = 0;
+	private static final int MSG_STOP = 1;
+	
 	private static final String TAG = "rtl_tcp_andro";
 	
-	private static RtlTcp.OnProcessTalkCallback callback1 = null;
-	private static RtlTcp.OnProcessSaidWord callback2 = null;
-	
-	public static BinaryRunnerService lastservice = null;
-	public static Object usbconnection = null; // the usb device that is open, try to close it actually when the service dies
+	private Looper mServiceLooper;
+	private ServiceHandler mServiceHandler;
 
-	private static LinkedList<OnServiceTalkCallback> callbacks = new LinkedList<OnServiceTalkCallback>();
+	private RtlTcp.OnProcessTalkCallback callback1;
 	private final static StringBuilder log = new StringBuilder();
-	private int startid;
 	private PowerManager.WakeLock wl = null;
 	
 	@Override
@@ -55,104 +57,113 @@ public class BinaryRunnerService extends Service {
 		return null;
 	}
 	
+	private final static class ServiceHandler extends Handler {
+		public ServiceHandler(Looper looper) {
+			super(looper);
+		}
+		@Override
+		public void handleMessage(Message msg) {
+			final int startid = msg.arg1;
+			final BinaryRunnerService thiservice = (BinaryRunnerService) msg.obj;
+
+			switch (msg.arg2) {
+			case MSG_START:
+
+				final Bundle data = msg.getData();
+
+				final String exename = data.getString("exe");
+				final String args = data.getString("args");
+				final boolean root = data.getBoolean("root");
+
+				try {
+
+					// close any previous attempts and try to reopen
+					RtlTcp.stop();
+
+					try {
+						thiservice.wl = null;
+						thiservice.wl = ((PowerManager)thiservice.getSystemService(
+								Context.POWER_SERVICE)).newWakeLock(
+										PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+										| PowerManager.ON_AFTER_RELEASE,
+										TAG);
+						thiservice.wl.acquire();
+						log.append("Ackquired wake lock. Will keep the screen on.\n");
+					} catch (Throwable e) {e.printStackTrace();}
+
+					if (root)
+						log.append("#su\n");
+					log.append("#"+exename+" "+args+"\n");
+
+					RtlTcp.unregisterWordCallback(thiservice.callback1);
+					RtlTcp.registerWordCallback(thiservice.callback1 = new RtlTcp.OnProcessTalkCallback() {
+
+						@Override
+						public void OnProcessTalk(final String line) {
+							log.append("rtl-tcp: ");
+							log.append(line);
+							log.append("\n");
+						}
+
+						@Override
+						public void OnClosed(int exitvalue, final RtlTcpException e) {
+							if (e != null)
+								log.append("Exit message: "+e.getMessage()+"\n");
+							else
+								log.append("Exit code: "+exitvalue+"\n");
+							
+							Message msg = thiservice.mServiceHandler.obtainMessage();
+							msg.arg1 = startid;
+							msg.arg2 = MSG_STOP;
+							msg.obj = thiservice;
+							thiservice.mServiceHandler.sendMessage(msg);
+						}
+					});
+
+					// TODO! GAIN ROOT HERE if root
+					RtlTcp.start(args);
+
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
+				final Notification notification = new Notification(android.R.drawable.ic_media_play, thiservice.getText(R.string.notif_title),
+						System.currentTimeMillis());
+				final Intent notificationIntent = new Intent(thiservice, StreamActivity.class);
+				final PendingIntent pendingIntent = PendingIntent.getActivity(thiservice, 0, notificationIntent, 0);
+				notification.setLatestEventInfo(thiservice, thiservice.getText(R.string.notif_title),
+						thiservice.getText(R.string.notif_message), pendingIntent);
+				thiservice.startForeground(startid, notification);
+
+				break;
+			case MSG_STOP:
+				thiservice.stopSelf(startid);
+				break;
+			}
+		}
+	}
+	
 	@Override
 	public void onStart(final Intent intent, final int startId) {
-		this.startid = startId;
 		super.onStart(intent, startId);
+		
+		HandlerThread thread = new HandlerThread("ServiceStartArguments", Process.THREAD_PRIORITY_DEFAULT);
+	    thread.start();
 
-		if (lastservice != null)
-			lastservice.stopSelf(lastservice.startid);
-
-		lastservice = this;
+	    // Get the HandlerThread's Looper and use it for our Handler
+	    mServiceLooper = thread.getLooper();
+	    mServiceHandler = new ServiceHandler(mServiceLooper);
 
 		log.delete(0, log.length());
-
-		final Bundle data = intent.getExtras();
-
-		final String exename = data.getString("exe");
-		final String args = data.getString("args");
-		final boolean root = data.getBoolean("root");
-
-		try {
-
-			// close any previous attempts and try to reopen
-			RtlTcp.stop();
-
-			try {
-				wl = null;
-				wl = ((PowerManager)getSystemService(
-						Context.POWER_SERVICE)).newWakeLock(
-								PowerManager.SCREEN_BRIGHT_WAKE_LOCK
-								| PowerManager.ON_AFTER_RELEASE,
-								TAG);
-				wl.acquire();
-				log("Ackquired wake lock. Will keep the screen on.");
-			} catch (Throwable e) {e.printStackTrace();}
-
-			if (root)
-				log("#su");
-			log("#"+exename+" "+args);
-
-			RtlTcp.unregisterWordCallback(callback1);
-			RtlTcp.registerWordCallback(callback1 = new RtlTcp.OnProcessTalkCallback() {
-
-				@Override
-				public void OnProcessTalk(final String line) {
-					log(line);
-					log.append(line);
-					log.append("\n");
-				}
-
-				@Override
-				public void OnClosed(int exitvalue) {
-					for (final OnServiceTalkCallback cb : callbacks) cb.OnClosed(exitvalue);
-					log.append("exit "+exitvalue);
-					stopSelf(startId);
-				}
-			});
-			
-			RtlTcp.unregisterWordCallback(callback2);
-			RtlTcp.registerWordCallback(callback2 = new RtlTcp.OnProcessSaidWord() {
-				
-				@Override
-				public void OnProcessSaid(String line) {
-					stopSelf(startId);
-				}
-				
-				@Override
-				public void OnClosed(int exitvalue) {
-					stopSelf(startId);
-				}
-			}, "exiting");
-			
-			// TODO! GAIN ROOT HERE if root
-			RtlTcp.start(args);
-
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
 		
-		final Notification notification = new Notification(android.R.drawable.ic_media_play, getText(R.string.notif_title),
-				System.currentTimeMillis());
-		final Intent notificationIntent = new Intent(this, StreamActivity.class);
-		final PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
-		notification.setLatestEventInfo(this, getText(R.string.notif_title),
-				getText(R.string.notif_message), pendingIntent);
-		startForeground(startId, notification);
+		Message msg = mServiceHandler.obtainMessage();
+	    msg.arg1 = startId;
+	    msg.arg2 = MSG_START;
+	    msg.obj = this;
+	    msg.setData(intent.getExtras());
+	    mServiceHandler.sendMessage(msg);
 
-	}
-	
-	public static void log(final String line) {
-		for (final OnServiceTalkCallback cb : callbacks) cb.OnProcessTalk(line);
-	}
-	
-	public static void registerCallback(final OnServiceTalkCallback callback) {
-		callbacks.add(callback);
-		callback.OnWholeLogDump(log.toString());
-	}
-	
-	public static void unregisterCallback(final OnServiceTalkCallback callback) {
-		callbacks.remove(callback);
+
 	}
 	
 	@SuppressLint("NewApi")
@@ -161,26 +172,11 @@ public class BinaryRunnerService extends Service {
 		RtlTcp.stop();
 		
 		try {
-			final UsbDeviceConnection conn = (UsbDeviceConnection) usbconnection;
-			conn.close();
-		} catch (Throwable t) {};
-		
-		try {
 			wl.release();
-			log("Wake lock released.");
+			log.append("Wake lock released.\n");
 		} catch (Throwable t) {};
 		
-		lastservice = null;
 		super.onDestroy();
-	}
-	
-	public static interface OnServiceTalkCallback {
-		/** Whenever the process writes something to its stdout, this will get called */
-		void OnProcessTalk(final String line);
-		
-		void OnClosed(final int exitvalue);
-
-		void OnWholeLogDump(final String log);
 	}
 
 }

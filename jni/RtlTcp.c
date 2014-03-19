@@ -11,6 +11,16 @@ static JavaVM *jvm;
 static int javaversion;
 jclass cls = NULL;
 
+void announce_exceptioncode( const int exception_code ) {
+	JNIEnv *env;
+	if ((*jvm)->GetEnv(jvm, (void **)&env, javaversion) == JNI_EDETACHED)
+		(*jvm)->AttachCurrentThread(jvm, &env, 0);
+
+	// write back to Java here
+	jmethodID method = (*env)->GetStaticMethodID(env, cls, "onclose", "(I)V");
+	(*env)->CallStaticVoidMethod(env, cls, method, exception_code);
+}
+
 void aprintf_stderr( const char* format , ... ) {
 	static char data[MAX_CHARS_IN_CLI_SEND_STRF];
 	static pthread_mutex_t cli_sprintf_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -116,7 +126,7 @@ void allocate_args_from_string(const char * string, int nargslength, int * argc,
 	(*argc) = id;
 }
 
-JNIEXPORT jint JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
+JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
 (JNIEnv * env, jclass class, jstring args) {
 	(*env)->GetJavaVM(env, &jvm);
 	javaversion = (*env)->GetVersion(env);
@@ -130,15 +140,13 @@ JNIEXPORT jint JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
 	char ** argv;
 
 	allocate_args_from_string(nargs, nargslength, &argc, &argv);
-	const int exitcode = rtltcp_main(argc, argv);
+	rtltcp_main(argc, argv);
 
 	(*env)->ReleaseStringUTFChars(env, args, nargs);
 
 	int i;
 	for (i = 0; i < argc; i++) free(argv[i]);
 	free(argv);
-
-	return exitcode;
 }
 
 JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_close

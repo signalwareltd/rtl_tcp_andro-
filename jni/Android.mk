@@ -29,7 +29,7 @@ jni/libusb-andro/libusb \
 jni/rtl-sdr/include \
 jni/rtl-sdr/src
 
-LOCAL_CFLAGS += -DLIBUSB_DESCRIBE="" -O3 -fno-builtin-printf -fno-builtin-fprintf
+LOCAL_CFLAGS += -Wall -DLIBUSB_DESCRIBE="" -O3 -fno-builtin-printf -fno-builtin-fprintf
 LOCAL_MODULE:= RtlTcp
 LOCAL_PRELINK_MODULE:= true
 include $(BUILD_SHARED_LIBRARY)

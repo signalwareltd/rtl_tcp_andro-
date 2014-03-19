@@ -1,23 +1,49 @@
 package marto.rtl_tcp_andro.core;
 
 import java.util.HashSet;
-import java.util.Hashtable;
 
 import android.util.Log;
 
 public class RtlTcp {
 	
+
+	final static int LIBUSB_ERROR_IO = -1;
+	final static int LIBUSB_ERROR_INVALID_PARAM = -2;
+	final static int LIBUSB_ERROR_ACCESS = -3;
+	final static int LIBUSB_ERROR_NO_DEVICE = -4;
+	final static int LIBUSB_ERROR_NOT_FOUND = -5;
+	final static int LIBUSB_ERROR_BUSY = -6;
+	final static int LIBUSB_ERROR_TIMEOUT = -7; 
+	final static int LIBUSB_ERROR_OVERFLOW = -8;
+	final static int LIBUSB_ERROR_PIPE = -9;
+	final static int LIBUSB_ERROR_INTERRUPTED = -10;
+	final static int LIBUSB_ERROR_NO_MEM = -11; 
+	final static int LIBUSB_ERROR_NOT_SUPPORTED = -12;
+	final static int LIBUSB_ERROR_OTHER = -99;
+	
+	final static int EXIT_OK = 0;
+	final static int EXIT_WRONG_ARGS = 1;
+	final static int EXIT_INVALID_FD = 2;
+	final static int EXIT_NO_DEVICES = 3;
+	final static int EXIT_FAILED_TO_OPEN_DEVICE = 4;
+	final static int EXIT_CANNOT_RESTART = 5;
+	final static int EXIT_CANNOT_CLOSE = 6;
+	final static int EXIT_UNKNOWN = 7;
+	final static int EXIT_SIGNAL_CAUGHT = 8;
+	
 	private volatile static boolean running = false;
 	private final static Object locker = new Object();
-	private final static Hashtable<String, HashSet<OnProcessSaidWord>> callbacks = new Hashtable<String, HashSet<OnProcessSaidWord>>();
+	private final static Object exitcode_locker = new Object();
 	private final static HashSet<OnProcessTalkCallback> talk_callacks = new HashSet<RtlTcp.OnProcessTalkCallback>();
 	
+	private static volatile int exitcode = EXIT_UNKNOWN;
+	private static volatile boolean exitcode_set = false;
 	
 	static {
         System.loadLibrary("RtlTcp");
     }
 	
-	private static native int open(final String args);// throws RtlTcpException;
+	private static native void open(final String args);// throws RtlTcpException;
 	private static native void close();// throws RtlTcpException;
 	
 	private static void printf_receiver(final String data) {
@@ -25,14 +51,6 @@ public class RtlTcp {
 		
 		for (final OnProcessTalkCallback c : talk_callacks)
 			c.OnProcessTalk(data);
-		
-		for (final String k : callbacks.keySet())
-			if (data.contains(k)) {
-				final HashSet<OnProcessSaidWord> wordcallbacks = callbacks.get(k);
-				if (wordcallbacks != null)
-					for (final OnProcessSaidWord callback : wordcallbacks)
-						callback.OnProcessSaid(data);
-			}
 	}
 	
 	private static void printf_stderr_receiver(final String data) {
@@ -40,37 +58,19 @@ public class RtlTcp {
 		
 		for (final OnProcessTalkCallback c : talk_callacks)
 			c.OnProcessTalk(data);
-		
-		for (final String k : callbacks.keySet())
-			if (data.contains(k)) {
-				final HashSet<OnProcessSaidWord> wordcallbacks = callbacks.get(k);
-				if (wordcallbacks != null)
-					for (final OnProcessSaidWord callback : wordcallbacks)
-						callback.OnProcessSaid(data);
-			}
+	}
+	
+	private static void onclose(int exitcode) {
+		Log.d("RTLTCP", "onClose: "+exitcode+" - "+RtlTcpException.translateToString(exitcode));
+		RtlTcp.exitcode = exitcode;
+		exitcode_set = true;
+		synchronized (exitcode_locker) {
+			exitcode_locker.notifyAll();
+		}
 	}
 	
 	public static void registerWordCallback(final OnProcessTalkCallback callback) {
 		talk_callacks.add(callback);
-	}
-	
-	public static void registerWordCallback(final OnProcessSaidWord callback, final String word) {
-
-		HashSet<OnProcessSaidWord> wordcallbacks = callbacks.get(word);
-		if (wordcallbacks == null) wordcallbacks = new HashSet<RtlTcp.OnProcessSaidWord>();
-		wordcallbacks.add(callback);
-		
-		callbacks.put(word, wordcallbacks);
-	}
-	
-	public static void unregisterWordCallback(final OnProcessSaidWord callback) {
-		for (final String k : callbacks.keySet()) {
-			final HashSet<OnProcessSaidWord> wordcallbacks = callbacks.get(k);
-			if (wordcallbacks != null) {
-				wordcallbacks.remove(callback);
-					callbacks.put(k, wordcallbacks);
-			}
-		}
 	}
 	
 	public static void unregisterWordCallback(final OnProcessTalkCallback callback) {
@@ -82,27 +82,42 @@ public class RtlTcp {
 		if (running) {
 			close();
 			try {
-				locker.wait(1000);
+				synchronized (locker) {
+					locker.wait(1000);
+				}
 			} catch (InterruptedException e) {}
 			
-			if (running) throw new RtlTcpException("Cannot restart");
+			if (running) throw new RtlTcpException(EXIT_CANNOT_RESTART);
 		}
 
 		new Thread() {
 			public void run() {
-				running = true;
-				final int exitvalue = open(args);
-				running = false;
-
-				for (final OnProcessTalkCallback c : talk_callacks)
-					c.OnClosed(exitvalue);
+				exitcode_set = false;
+				exitcode = EXIT_UNKNOWN;
 				
-				for (final String k : callbacks.keySet()) {
-					final HashSet<OnProcessSaidWord> wordcallbacks = callbacks.get(k);
-					for (final OnProcessSaidWord callback : wordcallbacks)
-						callback.OnClosed(exitvalue);
+				running = true;
+				open(args);
+				running = false;
+				
+				if (!exitcode_set) {
+					try {
+						synchronized (exitcode_locker) {
+							exitcode_locker.wait(1000);
+						}
+					} catch (InterruptedException e) {}
 				}
+				
+				if (!exitcode_set)
+					exitcode = EXIT_CANNOT_CLOSE;
 
+				RtlTcpException e = null;
+				if (exitcode != EXIT_OK) e = new RtlTcpException(exitcode);
+				for (final OnProcessTalkCallback c : talk_callacks)
+					c.OnClosed(exitcode, e);
+
+				synchronized (locker) {
+					locker.notifyAll();
+				}
 			};
 		}.start();
 	}
@@ -112,22 +127,11 @@ public class RtlTcp {
 		close();
 	}
 	
-	
-	/**
-	 * A callback whenever the process outputs a line containing a certain word onto its standard output or closes.
-	 */
-	public static interface OnProcessSaidWord {
-		void OnProcessSaid(final String line);
-
-		void OnClosed(final int exitvalue);
-
-	}
-	
 	public static interface OnProcessTalkCallback {
 		/** Whenever the process writes something to its stdout, this will get called */
 		void OnProcessTalk(final String line);
 
-		void OnClosed(final int exitvalue);
+		void OnClosed(final int exitvalue, final RtlTcpException e);
 
 	}
 	

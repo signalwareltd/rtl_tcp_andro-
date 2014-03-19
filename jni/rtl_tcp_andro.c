@@ -40,6 +40,9 @@
 
 #include <pthread.h>
 
+// For exit codes
+#include "RtlTcp.h"
+
 #include "rtl_tcp_andro.h"
 #include "librtlsdr_andro.h"
 #include "rtl-sdr/src/convenience/convenience.h"
@@ -68,6 +71,7 @@ static pthread_cond_t cond;
 
 void aprintf( const char* format , ... );
 void aprintf_stderr( const char* format , ... );
+void announce_exceptioncode( const int exception_code );
 
 struct llist {
 	char *data;
@@ -87,24 +91,7 @@ static int global_numq = 0;
 static struct llist *ll_buffers = 0;
 static int llbuf_num = 500;
 
-//SOCKET listensocket;
-
 static volatile int do_exit = 0;
-
-void usage(void)
-{
-	aprintf("rtl_tcp, an I/Q spectrum server for RTL2832 based DVB-T receivers\n\n"
-		"Usage:\t[-a listen address]\n"
-		"\t[-p listen port (default: 1234)]\n"
-		"\t[-f frequency to tune to [Hz]]\n"
-		"\t[-g gain (default: 0 for auto)]\n"
-		"\t[-s samplerate in Hz (default: 2048000 Hz)]\n"
-		"\t[-b number of buffers (default: 15, set by library)]\n"
-		"\t[-n max number of linked list buffers to keep (default: 500)]\n"
-		"\t[-d device index (default: 0)]\n"
-		"\t[-P ppm_error (default: 0)]\n");
-	exit(1);
-}
 
 #ifdef _WIN32
 int gettimeofday(struct timeval *tv, void* ignored)
@@ -142,9 +129,12 @@ sighandler(int signum)
 #else
 static void sighandler(int signum)
 {
-	aprintf_stderr("Signal caught, exiting!\n");
+
 	rtlsdr_cancel_async(dev);
-	//closesocket(listensocket);
+	if (signum != 0) {
+		aprintf_stderr("Signal caught, exiting! (signal %d)\n", signum);
+		announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_SIGNAL_CAUGHT);
+	}
 	do_exit = 1;
 }
 #endif
@@ -383,11 +373,7 @@ static void *command_worker(void *arg)
 			set_gain_by_index(dev, ntohl(cmd.param));
 			break;
 		case 0x7e:
-			rtlsdr_cancel_async(dev);
-			rtlsdr_close(dev);
-			//closesocket(listensocket);
-			closesocket(s);
-			exit(0);
+			sighandler(0);
 			break;
 		case 0x7f:
 			set_gain_by_perc(dev, ntohl(cmd.param));
@@ -400,10 +386,10 @@ static void *command_worker(void *arg)
 }
 
 void rtltcp_close() {
-	sighandler(SIGQUIT);
+	sighandler(0);
 }
 
-int rtltcp_main(int argc, char **argv)
+void rtltcp_main(int argc, char **argv)
 {
 	int r, opt, i;
 	int usbfd = -1;
@@ -426,6 +412,7 @@ int rtltcp_main(int argc, char **argv)
 	fd_set readfds;
 	u_long blockmode = 1;
 	dongle_info_t dongle_info;
+
 #ifdef _WIN32
 	WSADATA wsd;
 	i = WSAStartup(MAKEWORD(2,2), &wsd);
@@ -469,21 +456,23 @@ int rtltcp_main(int argc, char **argv)
 
 			if (!(fcntl(usbfd, F_GETFL) != -1 || errno != EBADF)) {
 				aprintf_stderr("Invalid file descriptor %d, - %s", usbfd, strerror(errno));
-				exit(1);
+				announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_INVALID_FD);
+				return;
 			}
 
 			break;
 		default:
-			usage();
-			break;
+			announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_WRONG_ARGS);
+			return;
 		}
 	}
 
-	if (argc < optind)
-		usage();
+	if (argc < optind) {
+		announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_WRONG_ARGS);
+		return;
+	}
 
-
-
+	r = 0;
 	if (usbfd == -1) {
 
 		if (!dev_given) {
@@ -492,17 +481,25 @@ int rtltcp_main(int argc, char **argv)
 
 		if (dev_index < 0) {
 			aprintf_stderr("No supported devices found.\n");
-			exit(1);
+			announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_NO_DEVICES );
+			return;
 		}
 
-		rtlsdr_open(&dev, dev_index);
+		r = rtlsdr_open(&dev, dev_index);
 	} else {
 		aprintf("Opening device with fd %d\n", usbfd);
-		rtlsdr_open2(&dev, dev_index, usbfd);
+		r = rtlsdr_open2(&dev, dev_index, usbfd);
 	}
+
+	if (r < 0) {
+		announce_exceptioncode( r );
+		return;
+	}
+
 	if (NULL == dev) {
-	aprintf_stderr("Failed to open rtlsdr device #%d.\n", dev_index);
-		exit(1);
+		aprintf_stderr("Failed to open rtlsdr device #%d.\n", dev_index);
+		announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_FAILED_TO_OPEN_DEVICE );
+		return;
 	}
 
 #ifndef _WIN32
@@ -660,5 +657,5 @@ out:
 	WSACleanup();
 #endif
 	aprintf("bye!\n");
-	return r >= 0 ? r : -r;
+	return;
 }
