@@ -196,25 +196,6 @@ public class StreamActivity extends FragmentActivity {
 		});
 	}
 
-// TODO!
-//	@Override
-//	public void OnProcessTalk(String line) {
-//		addToLog(line);
-//	}
-//
-//	@Override
-//	public void OnClosed(int exitvalue) {
-//		addToLog("Exited with value "+exitvalue);
-//		
-//		runOnUiThread(new Runnable() {
-//
-//			@Override
-//			public void run() {
-//				onoff.setChecked(BinaryRunnerService.lastservice != null);
-//			}
-//		});
-//	}
-	
 	@Override
 	protected void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
 
@@ -231,24 +212,8 @@ public class StreamActivity extends FragmentActivity {
 						addToLog("ERROR STARTING! Reason: "+einfo);
 					}
 				}
-
-				// TODO!
-				// onoff.setChecked(BinaryRunnerService.lastservice != null);
 			}
 		});
 	}
-
-// TODO!
-//	@Override
-//	public void OnWholeLogDump(final String log) {
-//		runOnUiThread(new Runnable() {
-//			
-//			@Override
-//			public void run() {
-//				terminal.setText(log);
-//				scroll.pageScroll(ScrollView.FOCUS_DOWN);
-//			}
-//		});
-//	}
 
 }

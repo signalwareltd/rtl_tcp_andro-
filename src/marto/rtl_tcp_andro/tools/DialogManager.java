@@ -156,11 +156,9 @@ public class DialogManager extends DialogFragment {
 			final UsbManager manager = (UsbManager) getActivity().getSystemService(Context.USB_SERVICE);
 			final HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
 			final String[] options = new String[deviceList.size()+1];
-			final String rootmode_string = StrRes.get(R.string.use_root);
 			int i = 0;
 			for (final String s : deviceList.keySet())
 				options[i++] = s;
-			options[i] = rootmode_string;
 			
 			return new AlertDialog.Builder(getActivity())
 					.setItems(options, new DialogInterface.OnClickListener() {
@@ -172,12 +170,8 @@ public class DialogManager extends DialogFragment {
 								final String selected = options[which];
 								
 								final UsbDevice selected_device = deviceList.get(selected);
-								final boolean rootmode = selected.equals(rootmode_string);
 								
-								if (rootmode)
-									sdrviewer.openDeviceUsingRoot();
-								else
-									sdrviewer.openDevice(selected_device);
+								sdrviewer.openDevice(selected_device);
 							}
 						}
 					})

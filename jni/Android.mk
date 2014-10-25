@@ -1,5 +1,5 @@
 LOCAL_PATH:= $(call my-dir)
-APP_PLATFORM:= android-8
+APP_PLATFORM:= android-14
 APP_ABI:= armeabi armeabi-v7a x86
 
 include $(CLEAR_VARS)
@@ -31,11 +31,5 @@ jni/rtl-sdr/src
 
 LOCAL_CFLAGS += -Wall -DLIBUSB_DESCRIBE="" -O3 -fno-builtin-printf -fno-builtin-fprintf
 LOCAL_MODULE:= RtlTcp
-LOCAL_PRELINK_MODULE:= true
-include $(BUILD_SHARED_LIBRARY)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := UsbPermissionHelper
-LOCAL_LDLIBS := -llog
-LOCAL_SRC_FILES := UsbPermissionHelper.c
+LOCAL_LDLIBS := -lm -llog
 include $(BUILD_SHARED_LIBRARY)

@@ -20,6 +20,10 @@
 #ifndef RTL_TCP_ANDRO_H_
 #define RTL_TCP_ANDRO_H_
 
+#include <android/log.h>
+
+#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "rtl_tcp_andro", __VA_ARGS__))
+
 void rtltcp_main(int argc, char **argv);
 void rtltcp_close();
 

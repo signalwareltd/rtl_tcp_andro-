@@ -72,6 +72,7 @@ static pthread_cond_t cond;
 void aprintf( const char* format , ... );
 void aprintf_stderr( const char* format , ... );
 void announce_exceptioncode( const int exception_code );
+void announce_success( );
 
 struct llist {
 	char *data;
@@ -93,40 +94,6 @@ static int llbuf_num = 500;
 
 static volatile int do_exit = 0;
 
-#ifdef _WIN32
-int gettimeofday(struct timeval *tv, void* ignored)
-{
-	FILETIME ft;
-	unsigned __int64 tmp = 0;
-	if (NULL != tv) {
-		GetSystemTimeAsFileTime(&ft);
-		tmp |= ft.dwHighDateTime;
-		tmp <<= 32;
-		tmp |= ft.dwLowDateTime;
-		tmp /= 10;
-#ifdef _MSC_VER
-		tmp -= 11644473600000000Ui64;
-#else
-		tmp -= 11644473600000000ULL;
-#endif
-		tv->tv_sec = (long)(tmp / 1000000UL);
-		tv->tv_usec = (long)(tmp % 1000000UL);
-	}
-	return 0;
-}
-
-BOOL WINAPI
-sighandler(int signum)
-{
-	if (CTRL_C_EVENT == signum) {
-		aprintf_stderr("Signal caught, exiting!\n");
-		do_exit = 1;
-		rtlsdr_cancel_async(dev);
-		return TRUE;
-	}
-	return FALSE;
-}
-#else
 static void sighandler(int signum)
 {
 
@@ -137,7 +104,6 @@ static void sighandler(int signum)
 	}
 	do_exit = 1;
 }
-#endif
 
 void rtlsdr_callback(unsigned char *buf, uint32_t len, void *ctx)
 {
@@ -184,7 +150,7 @@ void rtlsdr_callback(unsigned char *buf, uint32_t len, void *ctx)
 	}
 }
 
-static void *tcp_worker(void *arg)
+static void tcp_worker(void *arg)
 {
 	struct llist *curelem,*prev;
 	int bytesleft,bytessent, index;
@@ -280,18 +246,12 @@ static int set_gain_by_perc(rtlsdr_dev_t *_dev, unsigned int percent)
         return res;
 }
 
-#ifdef _WIN32
-#define __attribute__(x)
-#pragma pack(push, 1)
-#endif
 struct command{
 	unsigned char cmd;
 	unsigned int param;
 }__attribute__((packed));
-#ifdef _WIN32
-#pragma pack(pop)
-#endif
-static void *command_worker(void *arg)
+
+static void command_worker(void *arg)
 {
 	int left, received = 0;
 	fd_set readfds;
@@ -391,7 +351,7 @@ void rtltcp_close() {
 
 void rtltcp_main(int argc, char **argv)
 {
-	int r, opt, i;
+	int r, opt;
 	int usbfd = -1;
 	char* addr = "127.0.0.1";
 	int port = 1234;
@@ -410,17 +370,12 @@ void rtltcp_main(int argc, char **argv)
 	SOCKET listensocket;
 	socklen_t rlen;
 	fd_set readfds;
-	u_long blockmode = 1;
 	dongle_info_t dongle_info;
 
-#ifdef _WIN32
-	WSADATA wsd;
-	i = WSAStartup(MAKEWORD(2,2), &wsd);
-#else
 	struct sigaction sigact, sigign;
-#endif
 
 	while ((opt = getopt(argc, argv, "a:p:f:g:s:b:n:d:P:h:")) != -1) {
+		LOGI("OPT: %c: %s", opt, optarg);
 		switch (opt) {
 		case 'd':
 			dev_index = verbose_device_search(optarg);
@@ -475,6 +430,7 @@ void rtltcp_main(int argc, char **argv)
 	r = 0;
 	if (usbfd == -1) {
 
+
 		if (!dev_given) {
 			dev_index = verbose_device_search("0");
 		}
@@ -490,6 +446,7 @@ void rtltcp_main(int argc, char **argv)
 		aprintf("Opening device with fd %d\n", usbfd);
 		r = rtlsdr_open2(&dev, dev_index, usbfd);
 	}
+
 
 	if (r < 0) {
 		announce_exceptioncode( r );
@@ -623,10 +580,11 @@ void rtltcp_main(int argc, char **argv)
 
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-		r = pthread_create(&tcp_worker_thread, &attr, tcp_worker, NULL);
-		r = pthread_create(&command_thread, &attr, command_worker, NULL);
+		r = pthread_create(&tcp_worker_thread, &attr, (void *) tcp_worker, NULL);
+		r = pthread_create(&command_thread, &attr, (void *) command_worker, NULL);
 		pthread_attr_destroy(&attr);
 
+		announce_success();
 		r = rtlsdr_read_async(dev, rtlsdr_callback, NULL, buf_num, 0);
 
 		pthread_join(tcp_worker_thread, &status);

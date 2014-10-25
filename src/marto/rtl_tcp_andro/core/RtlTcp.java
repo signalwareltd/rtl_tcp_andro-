@@ -1,6 +1,7 @@
 package marto.rtl_tcp_andro.core;
 
 import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import android.util.Log;
 
@@ -37,7 +38,7 @@ public class RtlTcp {
 	private final static HashSet<OnProcessTalkCallback> talk_callacks = new HashSet<RtlTcp.OnProcessTalkCallback>();
 	
 	private static volatile int exitcode = EXIT_UNKNOWN;
-	private static volatile boolean exitcode_set = false;
+	private static volatile AtomicBoolean exitcode_set = new AtomicBoolean(false);
 	
 	static {
         System.loadLibrary("RtlTcp");
@@ -63,10 +64,16 @@ public class RtlTcp {
 	private static void onclose(int exitcode) {
 		Log.d("RTLTCP", "onClose: "+exitcode+" - "+RtlTcpException.translateToString(exitcode));
 		RtlTcp.exitcode = exitcode;
-		exitcode_set = true;
+		exitcode_set.set(true);
 		synchronized (exitcode_locker) {
 			exitcode_locker.notifyAll();
 		}
+	}
+	
+	private static void onopen() {
+		Log.d("RTLTCP", "opened!");
+		for (final OnProcessTalkCallback c : talk_callacks)
+			c.OnOpened();
 	}
 	
 	public static void registerWordCallback(final OnProcessTalkCallback callback) {
@@ -92,14 +99,14 @@ public class RtlTcp {
 
 		new Thread() {
 			public void run() {
-				exitcode_set = false;
+				exitcode_set.set(false);
 				exitcode = EXIT_UNKNOWN;
 				
 				running = true;
 				open(args);
 				running = false;
 				
-				if (!exitcode_set) {
+				if (!exitcode_set.get()) {
 					try {
 						synchronized (exitcode_locker) {
 							exitcode_locker.wait(1000);
@@ -107,11 +114,12 @@ public class RtlTcp {
 					} catch (InterruptedException e) {}
 				}
 				
-				if (!exitcode_set)
+				if (!exitcode_set.get())
 					exitcode = EXIT_CANNOT_CLOSE;
 
 				RtlTcpException e = null;
 				if (exitcode != EXIT_OK) e = new RtlTcpException(exitcode);
+
 				for (final OnProcessTalkCallback c : talk_callacks)
 					c.OnClosed(exitcode, e);
 
@@ -133,6 +141,7 @@ public class RtlTcp {
 
 		void OnClosed(final int exitvalue, final RtlTcpException e);
 
+		void OnOpened();
 	}
 	
 }

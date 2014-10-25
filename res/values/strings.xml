@@ -40,7 +40,7 @@
     <string name="enable_gui">Enable advanced mode (for debug &amp; stream to PC)</string>
 	
     <string name="exception_LIBUSB_GENERIC">libusb exception %s</string>
-    <string name="exception_LIBUSB_ERROR_ACCESS"></string>
+    <string name="exception_LIBUSB_ERROR_ACCESS">Cannot access device</string>
     <string name="exception_DEFAULT">Exception id %d</string>
     <string name="exception_OK">No exception :)</string>
     <string name="exception_WRONG_ARGS">Wrong arguments were supplied! Please, check the rtl_tcp manual!</string>

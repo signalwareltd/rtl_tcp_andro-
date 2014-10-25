@@ -19,41 +19,62 @@
 
 package marto.rtl_tcp_andro;
 
+import marto.rtl_tcp_andro.core.RtlTcpException;
 import marto.rtl_tcp_andro.tools.BinaryRunnerService;
+import marto.rtl_tcp_andro.tools.BinaryRunnerService.LocalBinder;
 import marto.rtl_tcp_andro.tools.DialogManager;
 import marto.rtl_tcp_andro.tools.RtlTcpStartException;
 import marto.rtl_tcp_andro.tools.StrRes;
-import marto.rtl_tcp_andro.tools.UsbPermissionHelper;
+import marto.rtl_tcp_andro.tools.DialogManager.dialogs;
 import marto.rtl_tcp_andro.tools.RtlTcpStartException.err_info;
+import marto.rtl_tcp_andro.tools.UsbPermissionHelper;
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentTransaction;
-import android.util.Log;
 import static marto.rtl_tcp_andro.StreamActivity.DISABLE_JAVA_FIX_PREF;
 import static marto.rtl_tcp_andro.StreamActivity.PREFS_NAME;
 
-public class DeviceOpenActivity extends FragmentActivity {
-	
-	private final static String TAG = "rtl_tcp_andro";
+public class DeviceOpenActivity extends FragmentActivity implements BinaryRunnerService.ExceptionListener {
 	
 	public static Intent intent = null;
-	private static DeviceOpenActivity mostrecent_activity = null;
 	private String arguments;
 	
+	private BinaryRunnerService mService;
+    private boolean mBound = false;
+	
 	public static PendingIntent permissionIntent;
+	
+	private final ServiceConnection mConnection = new ServiceConnection() {
+
+		@Override
+		public void onServiceConnected(ComponentName name, IBinder service) {
+			LocalBinder binder = (LocalBinder) service;
+            mService = binder.getService(DeviceOpenActivity.this);
+            mBound = true;		
+		}
+
+		@Override
+		public void onServiceDisconnected(ComponentName name) {
+			mBound = false;
+			finishWithError();
+		}
+    };
 	
 	@SuppressLint("NewApi")
 	@Override
@@ -62,7 +83,7 @@ public class DeviceOpenActivity extends FragmentActivity {
 		setContentView(R.layout.progress);
 		
 		final SharedPreferences pref = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-		UsbPermissionHelper.global_disable_java_fix = pref.getBoolean(DISABLE_JAVA_FIX_PREF, false);	
+		UsbPermissionHelper.global_disable_java_fix = pref.getBoolean(DISABLE_JAVA_FIX_PREF, false);
 		android.util.Log.d("rtl_tcp_andro", "On opening prefs are "+pref.getBoolean(DISABLE_JAVA_FIX_PREF, false));
 		
 		StrRes.res = getResources();
@@ -71,33 +92,14 @@ public class DeviceOpenActivity extends FragmentActivity {
 		arguments = data.toString().replace("iqsrc://", ""); // quick and dirty fix; me don't like it
 		android.util.Log.d("rtl_tcp_andro", "Args: "+arguments);
 		
-		mostrecent_activity = this;
-		
 		intent = getIntent();
 
-		// For auto play
-		try {
-			final UsbDevice device = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-			if (device != null)
-				openDevice(device);
-		} catch (Throwable e) {}
-		
-
-
 	}
+
 	
 	@Override
 	protected void onStart() {
 		super.onStart();
-		
-		// TODO!
-//		if (BinaryRunnerService.lastservice != null) {
-//			BinaryRunnerService.lastservice.stopSelf();
-//			try {Thread.sleep(50);} catch (Throwable e) {};
-//		}
-//		
-//		if (BinaryRunnerService.lastservice != null)
-//			finishWithError(err_info.already_running);
 		
 		try {
 			permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent("com.android.example.USB_PERMISSION"), 0);
@@ -107,7 +109,19 @@ public class DeviceOpenActivity extends FragmentActivity {
 		}
 		
 		try {
-			UsbPermissionHelper.findDevice(DeviceOpenActivity.this, false);
+			UsbPermissionHelper.STATUS res = UsbPermissionHelper.findDevice(DeviceOpenActivity.this, false);
+			
+			switch (res) {
+			case SHOW_DEVICE_DIALOG:
+				showDialog(dialogs.DIAG_LIST_USB);
+				break;
+			case REQUESTED_OPEN_DEVICE:
+				break;
+			case CANNOT_FIND:
+				finishWithError(err_info.no_devices_found);
+				break;
+			}
+			
 		} catch (Exception e) {
 			finishWithError(e);
 		}
@@ -123,11 +137,11 @@ public class DeviceOpenActivity extends FragmentActivity {
 			unregisterReceiver(mUsbReceiver);
 		} catch (Throwable e) {};
 		
-	}
-	
-	public static void showDialogStatic(final DialogManager.dialogs id, final String ... args) {
-		if (mostrecent_activity != null)
-			mostrecent_activity.showDialog(id, args);
+		if (mBound && mService != null) mService.unregisterListener(this);
+		if (mBound) {
+			mService = null;
+			unbindService(mConnection);
+		}
 	}
 	
 	public void showDialog(final DialogManager.dialogs id, final String ... args) {
@@ -168,34 +182,37 @@ public class DeviceOpenActivity extends FragmentActivity {
 		if (connection == null)
 			finishWithError(err_info.unknown_error);
 
-		final String address = getFilesDir().getAbsolutePath()+"/socket";
-		UsbPermissionHelper.native_startUnixSocketServer(address, connection.getFileDescriptor());
-
-		// TODO! CLOSE CONNECTION?
-		//BinaryRunnerService.usbconnection = connection;
-		startBinary(arguments + " -h "+address, false);	
+		startBinary(arguments + " -h "+connection.getFileDescriptor());	
 	}
-	
+
 	/**
 	 * Initializes open procedure without passing fds to libusb
 	 */
 	public void openDeviceUsingRoot() {
 		android.util.Log.d("rtl_tcp_andro", "Opening with root!");
-		startBinary(arguments, true);
+
+		try {
+			UsbPermissionHelper.fixRootPermissions();
+		} catch (RtlTcpStartException e) {
+			finishWithError(e);
+		}
+
+		startBinary(arguments);
 	}
+	
+
 	
 	/** 
 	 * Starts the tcp binary
 	 */
-	public void startBinary(final String arguments, final boolean root) {
+	public void startBinary(final String arguments) {
 		try {
 			//start the service
-			final Intent i = new Intent(this, BinaryRunnerService.class);
-			i.putExtra("exe", "rtl_tcp_andro");
-			i.putExtra("args", arguments);
-			i.putExtra("root", root);
-			startService(i);
-			
+
+			final Intent intent = BinaryRunnerService.buildStartIntent(this, arguments);
+			startService(intent);
+			bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
+
 		} catch (Exception e) {
 			finishWithError(e);
 		}
@@ -219,14 +236,23 @@ public class DeviceOpenActivity extends FragmentActivity {
 	}
 	
 	public void finishWithError(final Exception e) {
+		if (e == null) {
+			finishWithError();
+			return;
+		}
 		if ((e instanceof RtlTcpStartException))
 			finishWithError(((RtlTcpStartException) e).getReason());
+		else if (e instanceof RtlTcpException)
+			finishWithError(((RtlTcpException) e).getReason());
 		else
 			finishWithError();
 	}
 	
 	public void finishWithError(final RtlTcpStartException.err_info info) {
-		finishWithError(info.ordinal());
+		if (info != null)
+			finishWithError(info.ordinal());
+		else
+			finishWithError();
 	}
 	
 	public void finishWithError() {
@@ -244,13 +270,6 @@ public class DeviceOpenActivity extends FragmentActivity {
 		finish();
 	}
 	
-	@Override
-	public void finish() {
-		Log.d(TAG, "RTL2832U returning back to caller!");
-		super.finish();
-	}
-
-
 	/**
 	 * Accepts permission
 	 */
@@ -259,6 +278,7 @@ public class DeviceOpenActivity extends FragmentActivity {
 		@SuppressLint("NewApi")
 		public void onReceive(Context context, Intent intent) {
 
+			
 			String action = intent.getAction();
 			if ("com.android.example.USB_PERMISSION".equals(action)) {
 				synchronized (this) {
@@ -278,5 +298,20 @@ public class DeviceOpenActivity extends FragmentActivity {
 
 		}
 	};
+
+	@Override
+	public void onException(Exception e) {
+		if (e == null ){
+			finishWithError();
+			return;
+		}
+		finishWithError(e);
+	}
+
+
+	@Override
+	public void onStarted() {
+		finishWithSuccess();
+	}
 
 }

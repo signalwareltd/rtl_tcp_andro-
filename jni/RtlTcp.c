@@ -12,6 +12,7 @@ static int javaversion;
 jclass cls = NULL;
 
 void announce_exceptioncode( const int exception_code ) {
+
 	JNIEnv *env;
 	if ((*jvm)->GetEnv(jvm, (void **)&env, javaversion) == JNI_EDETACHED)
 		(*jvm)->AttachCurrentThread(jvm, &env, 0);
@@ -21,7 +22,19 @@ void announce_exceptioncode( const int exception_code ) {
 	(*env)->CallStaticVoidMethod(env, cls, method, exception_code);
 }
 
+void announce_success( ) {
+
+	JNIEnv *env;
+	if ((*jvm)->GetEnv(jvm, (void **)&env, javaversion) == JNI_EDETACHED)
+		(*jvm)->AttachCurrentThread(jvm, &env, 0);
+
+	// write back to Java here
+	jmethodID method = (*env)->GetStaticMethodID(env, cls, "onopen", "()V");
+	(*env)->CallStaticVoidMethod(env, cls, method);
+}
+
 void aprintf_stderr( const char* format , ... ) {
+	LOGI("APRINTFstderr\n");
 	static char data[MAX_CHARS_IN_CLI_SEND_STRF];
 	static pthread_mutex_t cli_sprintf_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -104,9 +117,9 @@ void allocate_args_from_string(const char * string, int nargslength, int * argc,
 		return;
 	}
 
-	(*argv) = malloc((*argc) * sizeof(char *));
-
-	int id = 0;
+	(*argv) = malloc(((*argc)+2) * sizeof(char *));
+	(*argv)[0] = 0;
+	int id = 1;
 	const char * laststart = string;
 	int lastlength = 0;
 	for (i = 0; i < nargslength-1; i++) {
@@ -123,6 +136,7 @@ void allocate_args_from_string(const char * string, int nargslength, int * argc,
 	lastlength++;
 	(*argv)[id] = (char *) malloc(lastlength+1);
 	strcpytrimmed((*argv)[id++], laststart, lastlength);
+	(*argv)[id] = 0;
 	(*argc) = id;
 }
 
