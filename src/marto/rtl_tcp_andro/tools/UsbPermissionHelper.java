@@ -41,21 +41,21 @@ import android.util.Xml;
 
 public class UsbPermissionHelper {
 	
-	public static boolean global_disable_java_fix = false; 
+	public static boolean force_root = false; 
 	
-	public enum STATUS {SHOW_DEVICE_DIALOG, REQUESTED_OPEN_DEVICE, CANNOT_FIND};
+	public enum STATUS {SHOW_DEVICE_DIALOG, REQUESTED_OPEN_DEVICE, CANNOT_FIND, CANNOT_FIND_TRY_ROOT};
 	
 	/**
 	 * Fixes permissions so that rtl_tcp could be run.
 	 * @return any additional parameters that should be passed to rtl_tcp so that it gets the right permissions
 	 * @throws Exception if device cannot be acquired
 	 */
-	public static STATUS findDevice(final DeviceOpenActivity ctx, final boolean disable_java_fix) throws RtlTcpStartException {
+	public static STATUS findDevice(final DeviceOpenActivity ctx, final boolean root) throws RtlTcpStartException {
 
-		if (!disable_java_fix && !global_disable_java_fix) {
+		if (!root && !force_root) {
 			try {
 				STATUS stat = fixJavaUSBAPIPermissions(ctx);
-				if (stat != STATUS.CANNOT_FIND) return stat;
+				if (stat != STATUS.CANNOT_FIND_TRY_ROOT) return stat;
 			} catch (Exception e) {
 				e.printStackTrace();
 				if (e instanceof RtlTcpStartException) throw (RtlTcpStartException) e;
@@ -75,13 +75,12 @@ public class UsbPermissionHelper {
 	
 	@SuppressLint("NewApi")
 	private static STATUS fixJavaUSBAPIPermissions(final DeviceOpenActivity activity) throws Exception {
-		UsbDevice device = null;
 
 		try {
 			final UsbManager manager = (UsbManager) activity.getSystemService(Context.USB_SERVICE);
 			// try to see whether we got the device from intent
 
-			device = (UsbDevice) DeviceOpenActivity.intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+			UsbDevice device = (UsbDevice) DeviceOpenActivity.intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
 
 			if (device == null) {
 				// auto selection by enumeration
@@ -94,24 +93,27 @@ public class UsbPermissionHelper {
 					final UsbDevice candidate = deviceList.get(desc);
 					final String candstr = "v"+candidate.getVendorId()+"p"+candidate.getProductId();
 					if (allowed.contains(candstr)) {
+						if (device != null) {
+							// we have more than one device that matches, let the user choose
+							return STATUS.SHOW_DEVICE_DIALOG;
+						}
 						device = candidate;
-						break;
 					}
 				}
 
 			}
+			
+			if (device == null) {
+				return STATUS.CANNOT_FIND;
+			} else {
+				activity.openDevice(device);
+				return STATUS.REQUESTED_OPEN_DEVICE;
+			}
 		} catch (Throwable e) {
 			if (e instanceof RtlTcpStartException) throw (RtlTcpStartException) e;
-			else
-				throw new Exception(e);
 		}
 
-		if (device == null) {
-			return STATUS.SHOW_DEVICE_DIALOG;
-		} else {
-			activity.openDevice(device);
-			return STATUS.REQUESTED_OPEN_DEVICE;
-		}
+		return STATUS.CANNOT_FIND_TRY_ROOT;
 	}
 	
 	private static HashSet<String> getDeviceData(final Context ctx) {
@@ -127,8 +129,8 @@ public class UsbPermissionHelper {
 				case XmlPullParser.START_TAG:
 					if (xml.getName().equals("usb-device")) {
 						final AttributeSet as = Xml.asAttributeSet(xml);
-						final String vendorId = as.getAttributeValue(null, "vendor-id");
-						final String productId = as.getAttributeValue(null, "product-id");
+						final Integer vendorId = Integer.valueOf( as.getAttributeValue(null, "vendor-id"), 16);
+						final Integer productId = Integer.valueOf( as.getAttributeValue(null, "product-id"), 16);
 						ans.add("v"+vendorId+"p"+productId);
 					}
 					break;
@@ -147,6 +149,7 @@ public class UsbPermissionHelper {
 		osw.flush();
 		
 		final String[] files = new File(dir).list();
+		if (files == null) return;
 		for (final String s : files) {
 			final String fname = dir + s; 
 			final File f = new File(fname);
@@ -188,8 +191,6 @@ public class UsbPermissionHelper {
 		try {
 			if (proc != null)
 				proc.waitFor();
-			else
-				throw new RtlTcpStartException(err_info.no_devices_found);
 		} catch (InterruptedException e) {}
 		
 		if (proc.exitValue() != 0)

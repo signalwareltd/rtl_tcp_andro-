@@ -83,7 +83,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 		setContentView(R.layout.progress);
 		
 		final SharedPreferences pref = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-		UsbPermissionHelper.global_disable_java_fix = pref.getBoolean(DISABLE_JAVA_FIX_PREF, false);
+		UsbPermissionHelper.force_root = pref.getBoolean(DISABLE_JAVA_FIX_PREF, false);
 		android.util.Log.d("rtl_tcp_andro", "On opening prefs are "+pref.getBoolean(DISABLE_JAVA_FIX_PREF, false));
 		
 		StrRes.res = getResources();
@@ -105,7 +105,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 			permissionIntent = PendingIntent.getBroadcast(this, 0, new Intent("com.android.example.USB_PERMISSION"), 0);
 			registerReceiver(mUsbReceiver, new IntentFilter("com.android.example.USB_PERMISSION"));
 		} catch (Throwable e) {
-			UsbPermissionHelper.global_disable_java_fix = true;
+			UsbPermissionHelper.force_root = true;
 		}
 		
 		try {
@@ -115,10 +115,10 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 			case SHOW_DEVICE_DIALOG:
 				showDialog(dialogs.DIAG_LIST_USB);
 				break;
-			case REQUESTED_OPEN_DEVICE:
-				break;
 			case CANNOT_FIND:
 				finishWithError(err_info.no_devices_found);
+				break;
+			default:
 				break;
 			}
 			
