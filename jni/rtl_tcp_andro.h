@@ -22,10 +22,17 @@
 
 #include <android/log.h>
 
+#ifndef LOGI
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "rtl_tcp_andro", __VA_ARGS__))
+#endif
 
 void rtltcp_main(int argc, char **argv);
 void rtltcp_close();
+
+void aprintf( const char* format , ... );
+void aprintf_stderr( const char* format , ... );
+void announce_exceptioncode( const int exception_code );
+void announce_success( );
 
 
 #endif

@@ -24,7 +24,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#ifndef _WIN32
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -33,10 +32,6 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <fcntl.h>
-#else
-#include <winsock2.h>
-#include "getopt/getopt.h"
-#endif
 
 #include <pthread.h>
 
@@ -47,17 +42,10 @@
 #include "librtlsdr_andro.h"
 #include "rtl-sdr/src/convenience/convenience.h"
 
-#ifdef _WIN32
-#pragma comment(lib, "ws2_32.lib")
-
-typedef int socklen_t;
-
-#else
 #define closesocket close
 #define SOCKADDR struct sockaddr
 #define SOCKET int
 #define SOCKET_ERROR -1
-#endif
 
 static SOCKET s;
 
@@ -68,11 +56,6 @@ static pthread_mutex_t exit_cond_lock;
 
 static pthread_mutex_t ll_mutex;
 static pthread_cond_t cond;
-
-void aprintf( const char* format , ... );
-void aprintf_stderr( const char* format , ... );
-void announce_exceptioncode( const int exception_code );
-void announce_success( );
 
 struct llist {
 	char *data;
@@ -459,7 +442,6 @@ void rtltcp_main(int argc, char **argv)
 		return;
 	}
 
-#ifndef _WIN32
 	sigact.sa_handler = sighandler;
 	sigemptyset(&sigact.sa_mask);
 	sigact.sa_flags = 0;
@@ -468,9 +450,6 @@ void rtltcp_main(int argc, char **argv)
 	sigaction(SIGTERM, &sigact, NULL);
 	sigaction(SIGQUIT, &sigact, NULL);
 	sigaction(SIGPIPE, &sigign, NULL);
-#else
-	SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
-#endif
 
 	/* Set the tuner error */
 	verbose_ppm_set(dev, ppm_error);
@@ -528,12 +507,8 @@ void rtltcp_main(int argc, char **argv)
 	setsockopt(listensocket, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
 	bind(listensocket,(struct sockaddr *)&local,sizeof(local));
 
-#ifdef _WIN32
-	ioctlsocket(listensocket, FIONBIO, &blockmode);
-#else
 	r = fcntl(listensocket, F_GETFL, 0);
 	r = fcntl(listensocket, F_SETFL, r | O_NONBLOCK);
-#endif
 
 	while(1) {
 		aprintf("listening...\n");
@@ -611,9 +586,6 @@ out:
 	rtlsdr_close(dev);
 	closesocket(listensocket);
 	closesocket(s);
-#ifdef _WIN32
-	WSACleanup();
-#endif
 	aprintf("bye!\n");
 	return;
 }

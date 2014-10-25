@@ -135,7 +135,7 @@ void allocate_args_from_string(const char * string, int nargslength, int * argc,
 	}
 	lastlength++;
 	(*argv)[id] = (char *) malloc(lastlength+1);
-	strcpytrimmed((*argv)[id++], laststart, lastlength);
+	strcpytrimmed((*argv)[id++], laststart, lastlength+1);
 	(*argv)[id] = 0;
 	(*argc) = id;
 }
