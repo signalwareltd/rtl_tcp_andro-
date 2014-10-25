@@ -1,1 +1,0 @@
-/usr/bin/gcc  -O3 -DNDEBUG    CMakeFiles/rtl_tcp.dir/rtl_tcp.c.o  -o rtl_tcp -rdynamic librtlsdr.so.0.5git libconvenience_static.a -lusb-1.0 -lpthread -Wl,-rpath,/home/martinmarinov/rtl-sdr/build/src: 

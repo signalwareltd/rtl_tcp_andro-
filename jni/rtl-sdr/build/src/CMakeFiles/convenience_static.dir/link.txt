@@ -1,2 +1,0 @@
-/usr/bin/ar cr libconvenience_static.a  CMakeFiles/convenience_static.dir/convenience/convenience.c.o
-/usr/bin/ranlib libconvenience_static.a
