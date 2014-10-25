@@ -33,6 +33,7 @@ void aprintf( const char* format , ... );
 void aprintf_stderr( const char* format , ... );
 void announce_exceptioncode( const int exception_code );
 void announce_success( );
+void thread_detach();
 
 
 #endif

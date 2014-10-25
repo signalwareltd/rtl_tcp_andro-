@@ -126,7 +126,7 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 		((Button) findViewById(R.id.clearbutton)).setOnClickListener(new Button.OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				terminal.setText("");
+				Log.clear();
 			}
 		});
 		
@@ -209,11 +209,11 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 			public void run() {
 				if (requestCode == START_REQ_CODE) {
 					if (resultCode == RESULT_OK)
-						Log.append("Starting was successful!\n");
+						Log.appendLine("Starting was successful!");
 					else {
 						err_info einfo = err_info.unknown_error;
 						try { einfo = err_info.values()[data.getIntExtra("marto.rtl_tcp_andro.RtlTcpExceptionId", err_info.unknown_error.ordinal())]; } catch (Throwable e) {};
-						Log.append("ERROR STARTING! Reason: "+einfo+"\n");
+						Log.appendLine("ERROR STARTING! Reason: "+einfo);
 					}
 				}
 			}

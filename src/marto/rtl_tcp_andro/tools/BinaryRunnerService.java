@@ -79,14 +79,28 @@ public class BinaryRunnerService extends Service {
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 
+		if (intent == null || intent.getStringExtra("args") == null) {
+			Log.appendLine("Service did received null argument.");
+			stopSelf();
+			return START_STICKY;
+		}
 		final String args = intent.getStringExtra("args");
 
 		try {
 			
 			accummulated_errors.clear();
+			
+			if (RtlTcp.isRunning()) {
+				Log.appendLine("Service is running. Stopping... You can safely start it again now.");
+				final Exception e = new Exception("Service is running. Stopping...");
+				for (final ExceptionListener listener : exception_listeners) listener.onException(e);
+				if (e != null) accummulated_errors.add(e);
+				stopSelf();
+				return START_STICKY;
+			}
 
 			// close any previous attempts and try to reopen
-			RtlTcp.stop();
+			
 
 			try {
 				wl = null;
@@ -96,28 +110,28 @@ public class BinaryRunnerService extends Service {
 								| PowerManager.ON_AFTER_RELEASE,
 								TAG);
 				wl.acquire();
-				Log.append("Ackquired wake lock. Will keep the screen on.\n");
+				Log.appendLine("Acquired wake lock. Will keep the screen on.");
 			} catch (Throwable e) {e.printStackTrace();}
 
-			Log.append("#rtl_tcp_andro "+args+"\n");
+			Log.appendLine("#rtl_tcp_andro "+args);
 
 			RtlTcp.unregisterWordCallback(callback1);
 			RtlTcp.registerWordCallback(callback1 = new RtlTcp.OnProcessTalkCallback() {
 
 				@Override
 				public void OnProcessTalk(final String line) {
-					Log.append("rtl-tcp: "+line+"\n");
+					Log.appendLine("rtl-tcp: "+line+"\n");
 				}
 
 				@Override
 				public void OnClosed(int exitvalue, final RtlTcpException e) {
 					if (e != null)
-						Log.append("Exit message: "+e.getMessage()+"\n");
+						Log.appendLine("Exit message: "+e.getMessage()+"\n");
 					else
-						Log.append("Exit code: "+exitvalue+"\n");
+						Log.appendLine("Exit code: "+exitvalue+"\n");
 	
 					for (final ExceptionListener listener : exception_listeners) listener.onException(e);
-					accummulated_errors.add(e);
+					if (e != null) accummulated_errors.add(e);
 					
 					stopSelf();
 				}
@@ -181,7 +195,7 @@ public class BinaryRunnerService extends Service {
 		
 		try {
 			wl.release();
-			Log.append("Wake lock released.\n");
+			Log.appendLine("Wake lock released");
 		} catch (Throwable t) {};
 		
 		super.onDestroy();

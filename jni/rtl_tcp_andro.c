@@ -51,11 +51,9 @@ static SOCKET s;
 
 static pthread_t tcp_worker_thread;
 static pthread_t command_thread;
-static pthread_cond_t exit_cond;
-static pthread_mutex_t exit_cond_lock;
 
-static pthread_mutex_t ll_mutex;
-static pthread_cond_t cond;
+static pthread_mutex_t ll_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 struct llist {
 	char *data;
@@ -77,14 +75,23 @@ static int llbuf_num = 500;
 
 static volatile int do_exit = 0;
 
+void init_all_variables() {
+	dev = NULL;
+	global_numq = 0;
+	llbuf_num = 500;
+	do_exit = 0;
+}
+
 static void sighandler(int signum)
 {
 
-	rtlsdr_cancel_async(dev);
+	if (dev != NULL)
+		rtlsdr_cancel_async(dev);
 	if (signum != 0) {
-		aprintf_stderr("Signal caught, exiting! (signal %d)\n", signum);
+		aprintf_stderr("Signal caught, exiting! (signal %d)", signum);
 		announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_SIGNAL_CAUGHT);
 	}
+
 	do_exit = 1;
 }
 
@@ -121,11 +128,6 @@ void rtlsdr_callback(unsigned char *buf, uint32_t len, void *ctx)
 
 			cur->next = rpt;
 
-			if (num_queued > global_numq)
-				aprintf("ll+, now %d\n", num_queued);
-			else if (num_queued < global_numq)
-				aprintf("ll-, now %d\n", num_queued);
-
 			global_numq = num_queued;
 		}
 		pthread_cond_signal(&cond);
@@ -144,8 +146,10 @@ static void tcp_worker(void *arg)
 	int r = 0;
 
 	while(1) {
-		if(do_exit)
+		if(do_exit) {
+			thread_detach();
 			pthread_exit(0);
+		}
 
 		pthread_mutex_lock(&ll_mutex);
 		gettimeofday(&tp, NULL);
@@ -154,8 +158,9 @@ static void tcp_worker(void *arg)
 		r = pthread_cond_timedwait(&cond, &ll_mutex, &ts);
 		if(r == ETIMEDOUT) {
 			pthread_mutex_unlock(&ll_mutex);
-			aprintf("worker cond timeout\n");
+			aprintf("worker cond timeout");
 			sighandler(0);
+			thread_detach();
 			pthread_exit(NULL);
 		}
 
@@ -179,8 +184,9 @@ static void tcp_worker(void *arg)
 					index += bytessent;
 				}
 				if(bytessent == SOCKET_ERROR || do_exit) {
-						aprintf("worker socket bye\n");
+						aprintf("worker socket bye");
 						sighandler(0);
+						thread_detach();
 						pthread_exit(NULL);
 				}
 			}
@@ -190,6 +196,8 @@ static void tcp_worker(void *arg)
 			free(prev);
 		}
 	}
+	thread_detach();
+	pthread_exit(NULL);
 }
 
 static int set_gain_by_index(rtlsdr_dev_t *_dev, unsigned int index)
@@ -256,66 +264,68 @@ static void command_worker(void *arg)
 				left -= received;
 			}
 			if(received == SOCKET_ERROR || do_exit) {
-				aprintf("comm recv bye\n");
+				aprintf("comm recv bye");
 				sighandler(0);
+				thread_detach();
 				pthread_exit(NULL);
 			}
 		}
 		switch(cmd.cmd) {
 		case 0x01:
-			aprintf("set freq %d\n", ntohl(cmd.param));
+			aprintf("set freq %d", ntohl(cmd.param));
 			rtlsdr_set_center_freq(dev,ntohl(cmd.param));
 			break;
 		case 0x02:
-			aprintf("set sample rate %d\n", ntohl(cmd.param));
+			aprintf("set sample rate %d", ntohl(cmd.param));
 			rtlsdr_set_sample_rate(dev, ntohl(cmd.param));
 			break;
 		case 0x03:
-			aprintf("set gain mode %d\n", ntohl(cmd.param));
+			aprintf("set gain mode %d", ntohl(cmd.param));
 			rtlsdr_set_tuner_gain_mode(dev, ntohl(cmd.param));
 			break;
 		case 0x04:
-			aprintf("set gain %d\n", ntohl(cmd.param));
+			aprintf("set gain %d", ntohl(cmd.param));
 			rtlsdr_set_tuner_gain(dev, ntohl(cmd.param));
 			break;
 		case 0x05:
-			aprintf("set freq correction %d\n", ntohl(cmd.param));
+			aprintf("set freq correction %d", ntohl(cmd.param));
 			rtlsdr_set_freq_correction(dev, ntohl(cmd.param));
 			break;
 		case 0x06:
 			tmp = ntohl(cmd.param);
-			aprintf("set if stage %d gain %d\n", tmp >> 16, (short)(tmp & 0xffff));
+			aprintf("set if stage %d gain %d", tmp >> 16, (short)(tmp & 0xffff));
 			rtlsdr_set_tuner_if_gain(dev, tmp >> 16, (short)(tmp & 0xffff));
 			break;
 		case 0x07:
-			aprintf("set test mode %d\n", ntohl(cmd.param));
+			aprintf("set test mode %d", ntohl(cmd.param));
 			rtlsdr_set_testmode(dev, ntohl(cmd.param));
 			break;
 		case 0x08:
-			aprintf("set agc mode %d\n", ntohl(cmd.param));
+			aprintf("set agc mode %d", ntohl(cmd.param));
 			rtlsdr_set_agc_mode(dev, ntohl(cmd.param));
 			break;
 		case 0x09:
-			aprintf("set direct sampling %d\n", ntohl(cmd.param));
+			aprintf("set direct sampling %d", ntohl(cmd.param));
 			rtlsdr_set_direct_sampling(dev, ntohl(cmd.param));
 			break;
 		case 0x0a:
-			aprintf("set offset tuning %d\n", ntohl(cmd.param));
+			aprintf("set offset tuning %d", ntohl(cmd.param));
 			rtlsdr_set_offset_tuning(dev, ntohl(cmd.param));
 			break;
 		case 0x0b:
-			aprintf("set rtl xtal %d\n", ntohl(cmd.param));
+			aprintf("set rtl xtal %d", ntohl(cmd.param));
 			rtlsdr_set_xtal_freq(dev, ntohl(cmd.param), 0);
 			break;
 		case 0x0c:
-			aprintf("set tuner xtal %d\n", ntohl(cmd.param));
+			aprintf("set tuner xtal %d", ntohl(cmd.param));
 			rtlsdr_set_xtal_freq(dev, 0, ntohl(cmd.param));
 			break;
 		case 0x0d:
-			aprintf("set tuner gain by index %d\n", ntohl(cmd.param));
+			aprintf("set tuner gain by index %d", ntohl(cmd.param));
 			set_gain_by_index(dev, ntohl(cmd.param));
 			break;
 		case 0x7e:
+			aprintf("client requested to close rtl_tcp_andro");
 			sighandler(0);
 			break;
 		case 0x7f:
@@ -326,6 +336,9 @@ static void command_worker(void *arg)
 		}
 		cmd.cmd = 0xff;
 	}
+	thread_detach();
+	pthread_exit(NULL);
+	return;
 }
 
 void rtltcp_close() {
@@ -355,10 +368,11 @@ void rtltcp_main(int argc, char **argv)
 	fd_set readfds;
 	dongle_info_t dongle_info;
 
+	init_all_variables();
+
 	struct sigaction sigact, sigign;
 
 	while ((opt = getopt(argc, argv, "a:p:f:g:s:b:n:d:P:h:")) != -1) {
-		LOGI("OPT: %c: %s", opt, optarg);
 		switch (opt) {
 		case 'd':
 			dev_index = verbose_device_search(optarg);
@@ -400,15 +414,19 @@ void rtltcp_main(int argc, char **argv)
 
 			break;
 		default:
+			aprintf_stderr("Unexpected argument '%c' with value '%s' received as an argument", opt, optarg);
 			announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_WRONG_ARGS);
 			return;
 		}
 	}
 
 	if (argc < optind) {
+		aprintf_stderr("Expected at least %d arguments, but got %d", optind, argc);
 		announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_WRONG_ARGS);
 		return;
 	}
+
+	optind = 0; // this is important since we will look at arguments more than once
 
 	r = 0;
 	if (usbfd == -1) {
@@ -419,14 +437,14 @@ void rtltcp_main(int argc, char **argv)
 		}
 
 		if (dev_index < 0) {
-			aprintf_stderr("No supported devices found.\n");
+			aprintf_stderr("No supported devices found.");
 			announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_NO_DEVICES );
 			return;
 		}
 
 		r = rtlsdr_open(&dev, dev_index);
 	} else {
-		aprintf("Opening device with fd %d\n", usbfd);
+		aprintf("Opening device with fd %d", usbfd);
 		r = rtlsdr_open2(&dev, dev_index, usbfd);
 	}
 
@@ -437,7 +455,7 @@ void rtltcp_main(int argc, char **argv)
 	}
 
 	if (NULL == dev) {
-		aprintf_stderr("Failed to open rtlsdr device #%d.\n", dev_index);
+		aprintf_stderr("Failed to open rtlsdr device #%d.", dev_index);
 		announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_FAILED_TO_OPEN_DEVICE );
 		return;
 	}
@@ -457,44 +475,38 @@ void rtltcp_main(int argc, char **argv)
 	/* Set the sample rate */
 	r = rtlsdr_set_sample_rate(dev, samp_rate);
 	if (r < 0)
-		aprintf_stderr("WARNING: Failed to set sample rate.\n");
+		aprintf_stderr("WARNING: Failed to set sample rate.");
 
 	/* Set the frequency */
 	r = rtlsdr_set_center_freq(dev, frequency);
 	if (r < 0)
-		aprintf_stderr("WARNING: Failed to set center freq.\n");
+		aprintf_stderr("WARNING: Failed to set center freq.");
 	else
-		aprintf_stderr("Tuned to %i Hz.\n", frequency);
+		aprintf_stderr("Tuned to %i Hz.", frequency);
 
 	if (0 == gain) {
 		 /* Enable automatic gain */
 		r = rtlsdr_set_tuner_gain_mode(dev, 0);
 		if (r < 0)
-			aprintf_stderr("WARNING: Failed to enable automatic gain.\n");
+			aprintf_stderr("WARNING: Failed to enable automatic gain.");
 	} else {
 		/* Enable manual gain */
 		r = rtlsdr_set_tuner_gain_mode(dev, 1);
 		if (r < 0)
-			aprintf_stderr("WARNING: Failed to enable manual gain.\n");
+			aprintf_stderr("WARNING: Failed to enable manual gain.");
 
 		/* Set the tuner gain */
 		r = rtlsdr_set_tuner_gain(dev, gain);
 		if (r < 0)
-			aprintf_stderr("WARNING: Failed to set tuner gain.\n");
+			aprintf_stderr("WARNING: Failed to set tuner gain.");
 		else
-			aprintf_stderr("Tuner gain set to %f dB.\n", gain/10.0);
+			aprintf_stderr("Tuner gain set to %f dB.", gain/10.0);
 	}
 
 	/* Reset endpoint before we start reading from it (mandatory) */
 	r = rtlsdr_reset_buffer(dev);
 	if (r < 0)
-		aprintf_stderr("WARNING: Failed to reset buffers.\n");
-
-	pthread_mutex_init(&exit_cond_lock, NULL);
-	pthread_mutex_init(&ll_mutex, NULL);
-	pthread_mutex_init(&exit_cond_lock, NULL);
-	pthread_cond_init(&cond, NULL);
-	pthread_cond_init(&exit_cond, NULL);
+		aprintf_stderr("WARNING: Failed to reset buffers.");
 
 	memset(&local,0,sizeof(local));
 	local.sin_family = AF_INET;
@@ -511,12 +523,8 @@ void rtltcp_main(int argc, char **argv)
 	r = fcntl(listensocket, F_SETFL, r | O_NONBLOCK);
 
 	while(1) {
-		aprintf("listening...\n");
-		aprintf("Use the device argument 'rtl_tcp=%s:%d' in OsmoSDR "
-		       "(gr-osmosdr) source\n"
-		       "to receive samples in GRC and control "
-		       "rtl_tcp parameters (frequency, gain, ...).\n",
-		       addr, port);
+		announce_success();
+		aprintf("listening on %s:%d...", addr, port);
 		listen(listensocket,1);
 
 		while(1) {
@@ -536,7 +544,7 @@ void rtltcp_main(int argc, char **argv)
 
 		setsockopt(s, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
 
-		aprintf("client accepted!\n");
+		aprintf("client accepted!");
 
 		memset(&dongle_info, 0, sizeof(dongle_info));
 		memcpy(&dongle_info.magic, "RTL0", 4);
@@ -551,7 +559,7 @@ void rtltcp_main(int argc, char **argv)
 
 		r = send(s, (const char *)&dongle_info, sizeof(dongle_info), 0);
 		if (sizeof(dongle_info) != r)
-			aprintf("failed to send dongle information\n");
+			aprintf("failed to send dongle information");
 
 		pthread_attr_init(&attr);
 		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
@@ -559,7 +567,6 @@ void rtltcp_main(int argc, char **argv)
 		r = pthread_create(&command_thread, &attr, (void *) command_worker, NULL);
 		pthread_attr_destroy(&attr);
 
-		announce_success();
 		r = rtlsdr_read_async(dev, rtlsdr_callback, NULL, buf_num, 0);
 
 		pthread_join(tcp_worker_thread, &status);
@@ -567,7 +574,7 @@ void rtltcp_main(int argc, char **argv)
 
 		closesocket(s);
 
-		aprintf("all threads dead..\n");
+		aprintf("all threads dead..");
 		curelem = ll_buffers;
 		ll_buffers = 0;
 
@@ -586,6 +593,7 @@ out:
 	rtlsdr_close(dev);
 	closesocket(listensocket);
 	closesocket(s);
-	aprintf("bye!\n");
+	announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_OK);
+	aprintf("bye!");
 	return;
 }

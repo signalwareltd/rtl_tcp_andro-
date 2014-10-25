@@ -8,7 +8,11 @@ public abstract class Log {
 	private final static ArrayList<Log.Callback> callbacks = new ArrayList<Log.Callback>();
 	
 	
-	public static void append(final String what) {
+	public static void appendLine(String what) {
+		while (what.charAt(what.length()-1) == '\n') {
+			what = what.substring(0, what.length()-1);
+		}
+		what+="\n";
 		synchronized (locker) {
 			log.append(what);
 			for (final Log.Callback callback : callbacks) callback.onAppend(what);

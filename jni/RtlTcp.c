@@ -10,6 +10,14 @@
 static JavaVM *jvm;
 static int javaversion;
 jclass cls = NULL;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void thread_detach() {
+	JNIEnv *env;
+	if ((*jvm)->GetEnv(jvm, (void **)&env, javaversion) == JNI_OK) {
+		(*jvm)->DetachCurrentThread(jvm);
+	}
+}
 
 void announce_exceptioncode( const int exception_code ) {
 
@@ -34,7 +42,6 @@ void announce_success( ) {
 }
 
 void aprintf_stderr( const char* format , ... ) {
-	LOGI("APRINTFstderr\n");
 	static char data[MAX_CHARS_IN_CLI_SEND_STRF];
 	static pthread_mutex_t cli_sprintf_lock = PTHREAD_MUTEX_INITIALIZER;
 

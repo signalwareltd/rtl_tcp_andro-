@@ -23,6 +23,7 @@ import marto.rtl_tcp_andro.core.RtlTcpException;
 import marto.rtl_tcp_andro.tools.BinaryRunnerService;
 import marto.rtl_tcp_andro.tools.BinaryRunnerService.LocalBinder;
 import marto.rtl_tcp_andro.tools.DialogManager;
+import marto.rtl_tcp_andro.tools.Log;
 import marto.rtl_tcp_andro.tools.RtlTcpStartException;
 import marto.rtl_tcp_andro.tools.StrRes;
 import marto.rtl_tcp_andro.tools.DialogManager.dialogs;
@@ -285,11 +286,14 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 					if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
 						if(device != null){
 							openDevice(device);
-						} else
+						} else {
 							finishWithError(err_info.permission_denied);
+							Log.appendLine("Android OS granted permissions but device was lost (due to a bug?).");
+						}
 					} 
 					else {
 						finishWithError(err_info.permission_denied);
+						Log.appendLine("Android OS refused giving permissions.");
 					}
 				}
 			}
@@ -300,7 +304,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 	@Override
 	public void onException(Exception e) {
 		if (e == null ){
-			finishWithError();
+			finishWithSuccess();
 			return;
 		}
 		finishWithError(e);

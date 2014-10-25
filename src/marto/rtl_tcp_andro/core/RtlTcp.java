@@ -2,11 +2,12 @@ package marto.rtl_tcp_andro.core;
 
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import android.util.Log;
 
 public class RtlTcp {
-	
+	private final static String TAG = "RTLTCP";
 
 	final static int LIBUSB_ERROR_IO = -1;
 	final static int LIBUSB_ERROR_INVALID_PARAM = -2;
@@ -32,12 +33,12 @@ public class RtlTcp {
 	final static int EXIT_UNKNOWN = 7;
 	final static int EXIT_SIGNAL_CAUGHT = 8;
 	
-	private volatile static boolean running = false;
+	private volatile static AtomicBoolean running = new AtomicBoolean(false);
 	private final static Object locker = new Object();
 	private final static Object exitcode_locker = new Object();
 	private final static ArrayList<OnProcessTalkCallback> talk_callacks = new ArrayList<RtlTcp.OnProcessTalkCallback>();
 	
-	private static volatile int exitcode = EXIT_UNKNOWN;
+	private static volatile AtomicInteger exitcode = new AtomicInteger(EXIT_UNKNOWN);
 	private static volatile AtomicBoolean exitcode_set = new AtomicBoolean(false);
 	
 	static {
@@ -48,32 +49,35 @@ public class RtlTcp {
 	private static native void close();// throws RtlTcpException;
 	
 	private static void printf_receiver(final String data) {
-		Log.d("RTLTCP", data);
-		
 		for (final OnProcessTalkCallback c : talk_callacks)
 			c.OnProcessTalk(data);
+		Log.d(TAG, data);
 	}
 	
 	private static void printf_stderr_receiver(final String data) {
-		Log.e("RTLTCP", data);
-		
 		for (final OnProcessTalkCallback c : talk_callacks)
 			c.OnProcessTalk(data);
+		Log.w(TAG, data);
 	}
 	
 	private static void onclose(int exitcode) {
-		Log.d("RTLTCP", "onClose: "+exitcode+" - "+RtlTcpException.translateToString(exitcode));
-		RtlTcp.exitcode = exitcode;
+		RtlTcp.exitcode.set(exitcode);
 		exitcode_set.set(true);
 		synchronized (exitcode_locker) {
 			exitcode_locker.notifyAll();
 		}
+		running.set(false);
+		if (exitcode != EXIT_OK)
+			Log.e(TAG, "Exitcode "+exitcode);
+		else
+			Log.d(TAG, "Exited with success");
 	}
 	
 	private static void onopen() {
-		Log.d("RTLTCP", "opened!");
 		for (final OnProcessTalkCallback c : talk_callacks)
 			c.OnOpened();
+		running.set(true);
+		Log.d(TAG, "Device open");
 	}
 	
 	public static void registerWordCallback(final OnProcessTalkCallback callback) {
@@ -86,53 +90,63 @@ public class RtlTcp {
 	
 	
 	public static void start(final String args) throws RtlTcpException {
-		if (running) {
+		if (running.get()) {
 			close();
 			try {
 				synchronized (locker) {
-					locker.wait(1000);
+					locker.wait(5000);
 				}
 			} catch (InterruptedException e) {}
-			
-			if (running) throw new RtlTcpException(EXIT_CANNOT_RESTART);
+
+			if (running.get()) throw new RtlTcpException(EXIT_CANNOT_RESTART);
 		}
 
 		new Thread() {
 			public void run() {
 				exitcode_set.set(false);
-				exitcode = EXIT_UNKNOWN;
-				
-				running = true;
-				open(args);
-				running = false;
-				
-				if (!exitcode_set.get()) {
-					try {
-						synchronized (exitcode_locker) {
-							exitcode_locker.wait(1000);
-						}
-					} catch (InterruptedException e) {}
-				}
-				
-				if (!exitcode_set.get())
-					exitcode = EXIT_CANNOT_CLOSE;
+				exitcode.set(EXIT_UNKNOWN);
 
-				RtlTcpException e = null;
-				if (exitcode != EXIT_OK) e = new RtlTcpException(exitcode);
+				running.set(true);
+				try {
+					open(args);
 
-				for (final OnProcessTalkCallback c : talk_callacks)
-					c.OnClosed(exitcode, e);
+					if (!exitcode_set.get()) {
+						close();
+						try {
+							synchronized (exitcode_locker) {
+								exitcode_locker.wait(1000);
+							}
+						} catch (InterruptedException e) {}
+					}
 
-				synchronized (locker) {
-					locker.notifyAll();
+					if (!exitcode_set.get())
+						exitcode.set(EXIT_CANNOT_CLOSE);
+
+					RtlTcpException e = null;
+					final int exitcode = RtlTcp.exitcode.get();
+					if (exitcode != EXIT_OK) e = new RtlTcpException(exitcode);
+
+					for (final OnProcessTalkCallback c : talk_callacks)
+						c.OnClosed(exitcode, e);
+
+					synchronized (locker) {
+						locker.notifyAll();
+					}
+
+				} finally {
+					running.set(false);
 				}
 			};
 		}.start();
 	}
 	
 	public static void stop() {
-		if (!running) return;
+		if (!running.get()) return;
 		close();
+	}
+	
+	public static boolean isRunning() {
+		return running.get();
 	}
 	
 	public static interface OnProcessTalkCallback {
