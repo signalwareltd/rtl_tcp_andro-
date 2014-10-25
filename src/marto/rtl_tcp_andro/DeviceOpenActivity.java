@@ -84,13 +84,11 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 		
 		final SharedPreferences pref = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		UsbPermissionHelper.force_root = pref.getBoolean(DISABLE_JAVA_FIX_PREF, false);
-		android.util.Log.d("rtl_tcp_andro", "On opening prefs are "+pref.getBoolean(DISABLE_JAVA_FIX_PREF, false));
 		
 		StrRes.res = getResources();
 		
 		final Uri data = getIntent().getData();
 		arguments = data.toString().replace("iqsrc://", ""); // quick and dirty fix; me don't like it
-		android.util.Log.d("rtl_tcp_andro", "Args: "+arguments);
 		
 		intent = getIntent();
 

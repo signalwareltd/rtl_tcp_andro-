@@ -1,6 +1,6 @@
 package marto.rtl_tcp_andro.core;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import android.util.Log;
@@ -35,7 +35,7 @@ public class RtlTcp {
 	private volatile static boolean running = false;
 	private final static Object locker = new Object();
 	private final static Object exitcode_locker = new Object();
-	private final static HashSet<OnProcessTalkCallback> talk_callacks = new HashSet<RtlTcp.OnProcessTalkCallback>();
+	private final static ArrayList<OnProcessTalkCallback> talk_callacks = new ArrayList<RtlTcp.OnProcessTalkCallback>();
 	
 	private static volatile int exitcode = EXIT_UNKNOWN;
 	private static volatile AtomicBoolean exitcode_set = new AtomicBoolean(false);
@@ -77,7 +77,7 @@ public class RtlTcp {
 	}
 	
 	public static void registerWordCallback(final OnProcessTalkCallback callback) {
-		talk_callacks.add(callback);
+		if (!talk_callacks.contains(callback)) talk_callacks.add(callback);
 	}
 	
 	public static void unregisterWordCallback(final OnProcessTalkCallback callback) {

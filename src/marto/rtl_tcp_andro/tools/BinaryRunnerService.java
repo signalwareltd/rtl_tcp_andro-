@@ -43,8 +43,7 @@ public class BinaryRunnerService extends Service {
 	private final static int ONGOING_NOTIFICATION_ID = 2;
 
 	private RtlTcp.OnProcessTalkCallback callback1;
-	private final static StringBuilder log = new StringBuilder();
-	private final ArrayList<LogListener> listeners = new ArrayList<BinaryRunnerService.LogListener>();
+	
 	private final ArrayList<ExceptionListener> exception_listeners = new ArrayList<BinaryRunnerService.ExceptionListener>();
 	private PowerManager.WakeLock wl = null;
 	
@@ -53,13 +52,9 @@ public class BinaryRunnerService extends Service {
 	private final IBinder mBinder = new LocalBinder();
 
 	public class LocalBinder extends Binder {
-		public BinaryRunnerService getService(final LogListener listener) {
-			listeners.add(listener);
-            return BinaryRunnerService.this;
-        }
 		
 		public BinaryRunnerService getService(final ExceptionListener listener) {
-			exception_listeners.add(listener);
+			if (!exception_listeners.contains(listener)) exception_listeners.add(listener);
 			for (Exception e : accummulated_errors) {
 				try {
 					listener.onException(e);
@@ -88,7 +83,6 @@ public class BinaryRunnerService extends Service {
 
 		try {
 			
-			log.delete(0, log.length());
 			accummulated_errors.clear();
 
 			// close any previous attempts and try to reopen
@@ -102,36 +96,27 @@ public class BinaryRunnerService extends Service {
 								| PowerManager.ON_AFTER_RELEASE,
 								TAG);
 				wl.acquire();
-				log.append("Ackquired wake lock. Will keep the screen on.\n");
+				Log.append("Ackquired wake lock. Will keep the screen on.\n");
 			} catch (Throwable e) {e.printStackTrace();}
 
-			log.append("#rtl_tcp_andro "+args+"\n");
+			Log.append("#rtl_tcp_andro "+args+"\n");
 
 			RtlTcp.unregisterWordCallback(callback1);
 			RtlTcp.registerWordCallback(callback1 = new RtlTcp.OnProcessTalkCallback() {
 
 				@Override
 				public void OnProcessTalk(final String line) {
-					final String logline = "rtl-tcp: "+line+"\n";
-					
-					for (final LogListener listener : listeners) listener.onLogLine(logline);
+					Log.append("rtl-tcp: "+line+"\n");
 				}
 
 				@Override
 				public void OnClosed(int exitvalue, final RtlTcpException e) {
-					
-					String line;
-					
 					if (e != null)
-						line = "Exit message: "+e.getMessage()+"\n";
+						Log.append("Exit message: "+e.getMessage()+"\n");
 					else
-						line = "Exit code: "+exitvalue+"\n";
-					
-
-					log.append(line);
-					
+						Log.append("Exit code: "+exitvalue+"\n");
+	
 					for (final ExceptionListener listener : exception_listeners) listener.onException(e);
-					for (final LogListener listener : listeners) listener.onLogLine(line);
 					accummulated_errors.add(e);
 					
 					stopSelf();
@@ -140,7 +125,7 @@ public class BinaryRunnerService extends Service {
 				@Override
 				public void OnOpened() {
 					for (final ExceptionListener listener : exception_listeners) listener.onStarted();
-					for (final LogListener listener : listeners) listener.onStateChanged(true);
+					Log.announceStateChanged(true);
 				}
 				
 				
@@ -178,16 +163,8 @@ public class BinaryRunnerService extends Service {
 		stopSelf();
 	}
 	
-	public void unregisterListener(final LogListener listener) {
-		listeners.remove(listener);
-	}
-	
 	public void unregisterListener(final ExceptionListener listener) {
 		exception_listeners.remove(listener);
-	}
-	
-	public String getLog() {
-		return log.toString();
 	}
 	
 	@SuppressLint("NewApi")
@@ -197,20 +174,17 @@ public class BinaryRunnerService extends Service {
 		
 		stopForeground(true);
 		
-		for (final LogListener listener : listeners) listener.onStateChanged(false);
+		Log.announceStateChanged(false);
 		for (final ExceptionListener listener : exception_listeners) listener.onException(null);
+		
+		RtlTcp.unregisterWordCallback(callback1);
 		
 		try {
 			wl.release();
-			log.append("Wake lock released.\n");
+			Log.append("Wake lock released.\n");
 		} catch (Throwable t) {};
 		
 		super.onDestroy();
-	}
-
-	public static interface LogListener {
-		public void onLogLine(final String line);
-		public void onStateChanged(final boolean state);
 	}
 	
 	public static interface ExceptionListener {

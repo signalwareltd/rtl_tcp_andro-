@@ -21,6 +21,7 @@ package marto.rtl_tcp_andro;
 
 import marto.rtl_tcp_andro.tools.DialogManager;
 import marto.rtl_tcp_andro.tools.DialogManager.dialogs;
+import marto.rtl_tcp_andro.tools.Log;
 import marto.rtl_tcp_andro.tools.RtlTcpStartException.err_info;
 import android.net.Uri;
 import android.os.Bundle;
@@ -42,7 +43,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
-public class StreamActivity extends FragmentActivity {
+public class StreamActivity extends FragmentActivity implements Log.Callback {
 	
 	public static final String PREFS_NAME = "rtl_tcp_androPREFS";
 	public static final String DISABLE_JAVA_FIX_PREF = "disable.java.usb.fix";
@@ -65,6 +66,8 @@ public class StreamActivity extends FragmentActivity {
 		terminal = (TextView) findViewById(R.id.terminal);
 		scroll = (ScrollView) findViewById(R.id.ScrollArea);
 		arguments = (EditText) findViewById(R.id.commandline);
+		
+		terminal.setText(Log.getFullLog());
 		
 		((Button) findViewById(R.id.enable_gui)).setOnClickListener(new View.OnClickListener() {
 			
@@ -94,7 +97,7 @@ public class StreamActivity extends FragmentActivity {
 			
 			@Override
 			public void onClick(View v) {
-				terminal.setText("");
+				Log.clear();
 				startActivityForResult(new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://"+arguments.getText().toString())), START_REQ_CODE);
 				onoff.setChecked(true);
 			}
@@ -160,7 +163,6 @@ public class StreamActivity extends FragmentActivity {
 	
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
-		outState.putString("log", terminal.getText().toString());
 		outState.putString("args", arguments.getText().toString());
 		super.onSaveInstanceState(outState);
 	}
@@ -168,7 +170,6 @@ public class StreamActivity extends FragmentActivity {
 	@Override
 	protected void onRestoreInstanceState(Bundle savedInstanceState) {
 		super.onRestoreInstanceState(savedInstanceState);
-		terminal.setText(savedInstanceState.getString("log"));
 		arguments.setText(savedInstanceState.getString("args"));
 		forceroot.setChecked(prefs.getBoolean(DISABLE_JAVA_FIX_PREF, false));
 	}
@@ -176,24 +177,27 @@ public class StreamActivity extends FragmentActivity {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		
-		//TODO!
-		//onoff.setChecked(BinaryRunnerService.lastservice != null);
+		terminal.setText(Log.getFullLog());
+		Log.registerCallback(this);
 	}
 	
-	/**
-	 * Thread safe append to terminal and auto scroll.
-	 * @param text The text to be appended to the terminal
-	 */
-	private void addToLog(final String text) {
-		runOnUiThread(new Runnable() {
-			
-			@Override
-			public void run() {
-				terminal.append(text+"\n");
-				scroll.pageScroll(ScrollView.FOCUS_DOWN);
-			}
-		});
+	@Override
+	protected void onPause() {
+		super.onPause();
+		Log.unregisterCallback(this);
+	}
+	
+	@Override
+	protected void onStart() {
+		super.onStart();
+		terminal.setText(Log.getFullLog());
+		Log.registerCallback(this);
+	}
+	
+	@Override
+	protected void onStop() {
+		super.onStop();
+		Log.unregisterCallback(this);
 	}
 
 	@Override
@@ -205,15 +209,48 @@ public class StreamActivity extends FragmentActivity {
 			public void run() {
 				if (requestCode == START_REQ_CODE) {
 					if (resultCode == RESULT_OK)
-						addToLog("Starting was successful!");
+						Log.append("Starting was successful!\n");
 					else {
 						err_info einfo = err_info.unknown_error;
 						try { einfo = err_info.values()[data.getIntExtra("marto.rtl_tcp_andro.RtlTcpExceptionId", err_info.unknown_error.ordinal())]; } catch (Throwable e) {};
-						addToLog("ERROR STARTING! Reason: "+einfo);
+						Log.append("ERROR STARTING! Reason: "+einfo+"\n");
 					}
 				}
 			}
 		});
+	}
+
+	@Override
+	public void onClear() {
+		runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				terminal.setText(Log.getFullLog());
+				scroll.pageScroll(ScrollView.FOCUS_DOWN);
+			}
+		});
+	}
+
+	@Override
+	public void onAppend(final String str) {
+		runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				terminal.append(str);
+				scroll.pageScroll(ScrollView.FOCUS_DOWN);
+			}
+		});
+	}
+
+	@Override
+	public void onServiceStatusChanged(final boolean on) {
+		runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				onoff.setChecked(on);
+			}
+		});
+		
 	}
 
 }
