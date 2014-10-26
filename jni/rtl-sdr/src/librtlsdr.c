@@ -1258,7 +1258,7 @@ static rtlsdr_dongle_t *find_known_device(uint16_t vid, uint16_t pid)
 uint32_t rtlsdr_get_device_count(void)
 {
 	int i;
-	libusb_context *ctx;
+	libusb_context *ctx = NULL;
 	libusb_device **list;
 	uint32_t device_count = 0;
 	struct libusb_device_descriptor dd;
