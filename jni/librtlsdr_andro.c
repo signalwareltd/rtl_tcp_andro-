@@ -25,6 +25,19 @@
 #include "rtl-sdr/src/librtlsdr.c"
 #include "rtl_tcp_andro.h"
 
+/**
+ * If updating to a new librtlsdr and rtlsdr_open in librtlsdr.c has been modified,
+ * copy and paste it here and change the line that refers to
+ *
+ *     r = libusb_open(device, &dev->devh);
+ *
+ * to
+ *
+ *     r = libusb_open2(device, &dev->devh, fd);
+ *
+ * and should be ready to go. This allows communicating with a rtl-sdr dongle that has
+ * its file descriptor already open.
+ */
 int rtlsdr_open2(rtlsdr_dev_t **out_dev, uint32_t index, int fd)
 {
 	int r;
