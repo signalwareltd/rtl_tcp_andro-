@@ -33,7 +33,6 @@ public class RtlTcp {
 	final static int EXIT_UNKNOWN = 7;
 	final static int EXIT_SIGNAL_CAUGHT = 8;
 	
-	private volatile static AtomicBoolean running = new AtomicBoolean(false);
 	private final static Object locker = new Object();
 	private final static Object exitcode_locker = new Object();
 	private final static ArrayList<OnProcessTalkCallback> talk_callacks = new ArrayList<RtlTcp.OnProcessTalkCallback>();
@@ -47,6 +46,7 @@ public class RtlTcp {
 	
 	private static native void open(final String args);// throws RtlTcpException;
 	private static native void close();// throws RtlTcpException;
+	public static native boolean isNativeRunning();
 	
 	private static void printf_receiver(final String data) {
 		for (final OnProcessTalkCallback c : talk_callacks)
@@ -66,7 +66,6 @@ public class RtlTcp {
 		synchronized (exitcode_locker) {
 			exitcode_locker.notifyAll();
 		}
-		running.set(false);
 		if (exitcode != EXIT_OK)
 			Log.e(TAG, "Exitcode "+exitcode);
 		else
@@ -76,7 +75,6 @@ public class RtlTcp {
 	private static void onopen() {
 		for (final OnProcessTalkCallback c : talk_callacks)
 			c.OnOpened();
-		running.set(true);
 		Log.d(TAG, "Device open");
 	}
 	
@@ -90,7 +88,7 @@ public class RtlTcp {
 	
 	
 	public static void start(final String args) throws RtlTcpException {
-		if (running.get()) {
+		if (isNativeRunning()) {
 			close();
 			try {
 				synchronized (locker) {
@@ -98,7 +96,7 @@ public class RtlTcp {
 				}
 			} catch (InterruptedException e) {}
 
-			if (running.get()) throw new RtlTcpException(EXIT_CANNOT_RESTART);
+			if (isNativeRunning()) throw new RtlTcpException(EXIT_CANNOT_RESTART);
 		}
 
 		new Thread() {
@@ -106,47 +104,37 @@ public class RtlTcp {
 				exitcode_set.set(false);
 				exitcode.set(EXIT_UNKNOWN);
 
-				running.set(true);
-				try {
-					open(args);
+				open(args);
 
-					if (!exitcode_set.get()) {
-						close();
-						try {
-							synchronized (exitcode_locker) {
-								exitcode_locker.wait(1000);
-							}
-						} catch (InterruptedException e) {}
-					}
+				if (!exitcode_set.get()) {
+					close();
+					try {
+						synchronized (exitcode_locker) {
+							exitcode_locker.wait(1000);
+						}
+					} catch (InterruptedException e) {}
+				}
 
-					if (!exitcode_set.get())
-						exitcode.set(EXIT_CANNOT_CLOSE);
+				if (!exitcode_set.get())
+					exitcode.set(EXIT_CANNOT_CLOSE);
 
-					RtlTcpException e = null;
-					final int exitcode = RtlTcp.exitcode.get();
-					if (exitcode != EXIT_OK) e = new RtlTcpException(exitcode);
+				RtlTcpException e = null;
+				final int exitcode = RtlTcp.exitcode.get();
+				if (exitcode != EXIT_OK) e = new RtlTcpException(exitcode);
 
-					for (final OnProcessTalkCallback c : talk_callacks)
-						c.OnClosed(exitcode, e);
+				for (final OnProcessTalkCallback c : talk_callacks)
+					c.OnClosed(exitcode, e);
 
-					synchronized (locker) {
-						locker.notifyAll();
-					}
-
-				} finally {
-					running.set(false);
+				synchronized (locker) {
+					locker.notifyAll();
 				}
 			};
 		}.start();
 	}
 	
 	public static void stop() {
-		if (!running.get()) return;
+		if (!isNativeRunning()) return;
 		close();
-	}
-	
-	public static boolean isRunning() {
-		return running.get();
 	}
 	
 	public static interface OnProcessTalkCallback {

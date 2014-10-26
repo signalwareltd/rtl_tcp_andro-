@@ -175,3 +175,8 @@ JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_close
 	rtltcp_close();
 }
 
+JNIEXPORT jboolean JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_isNativeRunning
+  (JNIEnv * env, jclass class) {
+	return (jboolean) ((rtltcp_isrunning()) ? (JNI_TRUE) : (JNI_FALSE));
+}
+

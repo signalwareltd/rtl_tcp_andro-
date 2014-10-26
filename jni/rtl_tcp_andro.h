@@ -28,6 +28,7 @@
 
 void rtltcp_main(int argc, char **argv);
 void rtltcp_close();
+int rtltcp_isrunning();
 
 void aprintf( const char* format , ... );
 void aprintf_stderr( const char* format , ... );

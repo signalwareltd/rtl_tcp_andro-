@@ -90,7 +90,7 @@ public class BinaryRunnerService extends Service {
 			
 			accummulated_errors.clear();
 			
-			if (RtlTcp.isRunning()) {
+			if (RtlTcp.isNativeRunning()) {
 				Log.appendLine("Service is running. Stopping... You can safely start it again now.");
 				final Exception e = new Exception("Service is running. Stopping...");
 				for (final ExceptionListener listener : exception_listeners) listener.onException(e);

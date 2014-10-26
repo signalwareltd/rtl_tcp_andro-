@@ -53,6 +53,7 @@ static pthread_t tcp_worker_thread;
 static pthread_t command_thread;
 
 static pthread_mutex_t ll_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t running_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 struct llist {
@@ -74,12 +75,26 @@ static struct llist *ll_buffers = 0;
 static int llbuf_num = 500;
 
 static volatile int do_exit = 0;
+static volatile int is_running = 0;
 
 void init_all_variables() {
 	dev = NULL;
 	global_numq = 0;
 	llbuf_num = 500;
 	do_exit = 0;
+
+	if (ll_buffers != 0) {
+		struct llist *curelem,*prev;
+		curelem = ll_buffers;
+		ll_buffers = 0;
+
+		while(curelem != 0) {
+			prev = curelem;
+			curelem = curelem->next;
+			free(prev->data);
+			free(prev);
+		}
+	}
 }
 
 static void sighandler(int signum)
@@ -345,6 +360,14 @@ void rtltcp_close() {
 	sighandler(0);
 }
 
+int rtltcp_isrunning() {
+	int isit_running = 0;
+	pthread_mutex_lock(&running_mutex);
+	isit_running = is_running;
+	pthread_mutex_unlock(&running_mutex);
+	return isit_running;
+}
+
 void rtltcp_main(int argc, char **argv)
 {
 	int r, opt;
@@ -367,6 +390,10 @@ void rtltcp_main(int argc, char **argv)
 	socklen_t rlen;
 	fd_set readfds;
 	dongle_info_t dongle_info;
+
+	pthread_mutex_lock(&running_mutex);
+	is_running = 1;
+	pthread_mutex_unlock(&running_mutex);
 
 	init_all_variables();
 
@@ -485,7 +512,7 @@ void rtltcp_main(int argc, char **argv)
 		aprintf_stderr("Tuned to %i Hz.", frequency);
 
 	if (0 == gain) {
-		 /* Enable automatic gain */
+		/* Enable automatic gain */
 		r = rtlsdr_set_tuner_gain_mode(dev, 0);
 		if (r < 0)
 			aprintf_stderr("WARNING: Failed to enable automatic gain.");
@@ -522,78 +549,79 @@ void rtltcp_main(int argc, char **argv)
 	r = fcntl(listensocket, F_GETFL, 0);
 	r = fcntl(listensocket, F_SETFL, r | O_NONBLOCK);
 
+	announce_success();
+	aprintf("listening on %s:%d...", addr, port);
+	listen(listensocket,1);
+
 	while(1) {
-		announce_success();
-		aprintf("listening on %s:%d...", addr, port);
-		listen(listensocket,1);
-
-		while(1) {
-			FD_ZERO(&readfds);
-			FD_SET(listensocket, &readfds);
-			tv.tv_sec = 1;
-			tv.tv_usec = 0;
-			r = select(listensocket+1, &readfds, NULL, NULL, &tv);
-			if(do_exit) {
-				goto out;
-			} else if(r) {
-				rlen = sizeof(remote);
-				s = accept(listensocket,(struct sockaddr *)&remote, &rlen);
-				break;
-			}
+		FD_ZERO(&readfds);
+		FD_SET(listensocket, &readfds);
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+		r = select(listensocket+1, &readfds, NULL, NULL, &tv);
+		if(do_exit) {
+			goto out;
+		} else if(r) {
+			rlen = sizeof(remote);
+			s = accept(listensocket,(struct sockaddr *)&remote, &rlen);
+			break;
 		}
-
-		setsockopt(s, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
-
-		aprintf("client accepted!");
-
-		memset(&dongle_info, 0, sizeof(dongle_info));
-		memcpy(&dongle_info.magic, "RTL0", 4);
-
-		r = rtlsdr_get_tuner_type(dev);
-		if (r >= 0)
-			dongle_info.tuner_type = htonl(r);
-
-		r = rtlsdr_get_tuner_gains(dev, NULL);
-		if (r >= 0)
-			dongle_info.tuner_gain_count = htonl(r);
-
-		r = send(s, (const char *)&dongle_info, sizeof(dongle_info), 0);
-		if (sizeof(dongle_info) != r)
-			aprintf("failed to send dongle information");
-
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-		r = pthread_create(&tcp_worker_thread, &attr, (void *) tcp_worker, NULL);
-		r = pthread_create(&command_thread, &attr, (void *) command_worker, NULL);
-		pthread_attr_destroy(&attr);
-
-		r = rtlsdr_read_async(dev, rtlsdr_callback, NULL, buf_num, 0);
-
-		pthread_join(tcp_worker_thread, &status);
-		pthread_join(command_thread, &status);
-
-		closesocket(s);
-
-		aprintf("all threads dead..");
-		curelem = ll_buffers;
-		ll_buffers = 0;
-
-		while(curelem != 0) {
-			prev = curelem;
-			curelem = curelem->next;
-			free(prev->data);
-			free(prev);
-		}
-
-		do_exit = 0;
-		global_numq = 0;
 	}
 
-out:
+	setsockopt(s, SOL_SOCKET, SO_LINGER, (char *)&ling, sizeof(ling));
+
+	aprintf("client accepted!");
+
+	memset(&dongle_info, 0, sizeof(dongle_info));
+	memcpy(&dongle_info.magic, "RTL0", 4);
+
+	r = rtlsdr_get_tuner_type(dev);
+	if (r >= 0)
+		dongle_info.tuner_type = htonl(r);
+
+	r = rtlsdr_get_tuner_gains(dev, NULL);
+	if (r >= 0)
+		dongle_info.tuner_gain_count = htonl(r);
+
+	r = send(s, (const char *)&dongle_info, sizeof(dongle_info), 0);
+	if (sizeof(dongle_info) != r)
+		aprintf("failed to send dongle information");
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	r = pthread_create(&tcp_worker_thread, &attr, (void *) tcp_worker, NULL);
+	r = pthread_create(&command_thread, &attr, (void *) command_worker, NULL);
+	pthread_attr_destroy(&attr);
+
+	r = rtlsdr_read_async(dev, rtlsdr_callback, NULL, buf_num, 0);
+
+	pthread_join(tcp_worker_thread, &status);
+	pthread_join(command_thread, &status);
+
+	closesocket(s);
+
+	aprintf("all threads dead..");
+	curelem = ll_buffers;
+	ll_buffers = 0;
+
+	while(curelem != 0) {
+		prev = curelem;
+		curelem = curelem->next;
+		if (prev->data != NULL) free(prev->data);
+		free(prev);
+	}
+
+	do_exit = 0;
+	global_numq = 0;
+
+	out:
 	rtlsdr_close(dev);
 	closesocket(listensocket);
 	closesocket(s);
 	announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_OK);
+	pthread_mutex_lock(&running_mutex);
+	is_running = 0;
+	pthread_mutex_unlock(&running_mutex);
 	aprintf("bye!");
 	return;
 }

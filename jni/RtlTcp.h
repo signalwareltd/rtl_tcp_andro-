@@ -67,6 +67,14 @@ JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
 JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_close
   (JNIEnv *, jclass);
 
+/*
+ * Class:     marto_rtl_tcp_andro_core_RtlTcp
+ * Method:    isNativeRunning
+ * Signature: ()Z
+ */
+JNIEXPORT jboolean JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_isNativeRunning
+  (JNIEnv *, jclass);
+
 #ifdef __cplusplus
 }
 #endif
