@@ -7,10 +7,14 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES:= \
  libusb-andro/libusb/core.c \
  libusb-andro/libusb/descriptor.c \
+ libusb-andro/libusb/hotplug.c \
  libusb-andro/libusb/io.c \
  libusb-andro/libusb/sync.c \
+ libusb-andro/libusb/strerror.c \
  libusb-andro/libusb/os/linux_usbfs.c \
- libusb-andro/libusb/os/threads_posix.c\
+ libusb-andro/libusb/os/poll_posix.c \
+ libusb-andro/libusb/os/threads_posix.c \
+ libusb-andro/libusb/os/linux_netlink.c \
  RtlTcp.c \
  rtl_tcp_andro.c \
  rtl-sdr/src/convenience/convenience.c \
@@ -25,7 +29,6 @@ LOCAL_C_INCLUDES += \
 jni/libusb-andro \
 jni/libusb-andro/libusb \
 jni/libusb-andro/libusb/os \
-jni/libusb-andro/libusb \
 jni/rtl-sdr/include \
 jni/rtl-sdr/src
 

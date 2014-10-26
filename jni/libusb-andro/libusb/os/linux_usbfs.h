@@ -1,11 +1,10 @@
 /*
  * usbfs header structures
- * Copyright (C) 2007 Daniel Drake <dsd@gentoo.org>
- * Copyright (c) 2001 Johannes Erdfelt <johannes@erdfelt.com>
+ * Copyright © 2007 Daniel Drake <dsd@gentoo.org>
+ * Copyright © 2001 Johannes Erdfelt <johannes@erdfelt.com>
  *
- *
- * Modified 2013 Martin Marinov <martintzvetomirov@gmail.com>
- *  - Added function open2 to open a devce from an existing file 
+ * Modified 2014 Martin Marinov <martintzvetomirov@gmail.com>
+ *  - Added function open2 to open a devce from an existing file
  *  descriptor
  *
  * This library is free software; you can redistribute it and/or
@@ -25,6 +24,8 @@
 
 #ifndef LIBUSB_USBFS_H
 #define LIBUSB_USBFS_H
+
+#include <linux/types.h>
 
 #define SYSFS_DEVICE_PATH "/sys/bus/usb/devices"
 
@@ -97,7 +98,10 @@ struct usbfs_urb {
 	int buffer_length;
 	int actual_length;
 	int start_frame;
-	int number_of_packets;
+	union {
+		int number_of_packets;	/* Only used for isoc urbs */
+		unsigned int stream_id;	/* Only used with bulk streams */
+	};
 	int error_count;
 	unsigned int signr;
 	void *usercontext;
@@ -121,6 +125,26 @@ struct usbfs_hub_portinfo {
 	unsigned char port[127];	/* port to device num mapping */
 };
 
+#define USBFS_CAP_ZERO_PACKET		0x01
+#define USBFS_CAP_BULK_CONTINUATION	0x02
+#define USBFS_CAP_NO_PACKET_SIZE_LIM	0x04
+#define USBFS_CAP_BULK_SCATTER_GATHER	0x08
+
+#define USBFS_DISCONNECT_CLAIM_IF_DRIVER	0x01
+#define USBFS_DISCONNECT_CLAIM_EXCEPT_DRIVER	0x02
+
+struct usbfs_disconnect_claim {
+	unsigned int interface;
+	unsigned int flags;
+	char driver[USBFS_MAXDRIVERNAME + 1];
+};
+
+struct usbfs_streams {
+	unsigned int num_streams; /* Not used by USBDEVFS_FREE_STREAMS */
+	unsigned int num_eps;
+	unsigned char eps[0];
+};
+
 #define IOCTL_USBFS_CONTROL	_IOWR('U', 0, struct usbfs_ctrltransfer)
 #define IOCTL_USBFS_BULK		_IOWR('U', 2, struct usbfs_bulktransfer)
 #define IOCTL_USBFS_RESETEP	_IOR('U', 3, unsigned int)
@@ -140,5 +164,33 @@ struct usbfs_hub_portinfo {
 #define IOCTL_USBFS_CLEAR_HALT	_IOR('U', 21, unsigned int)
 #define IOCTL_USBFS_DISCONNECT	_IO('U', 22)
 #define IOCTL_USBFS_CONNECT	_IO('U', 23)
+#define IOCTL_USBFS_CLAIM_PORT	_IOR('U', 24, unsigned int)
+#define IOCTL_USBFS_RELEASE_PORT	_IOR('U', 25, unsigned int)
+#define IOCTL_USBFS_GET_CAPABILITIES	_IOR('U', 26, __u32)
+#define IOCTL_USBFS_DISCONNECT_CLAIM	_IOR('U', 27, struct usbfs_disconnect_claim)
+#define IOCTL_USBFS_ALLOC_STREAMS	_IOR('U', 28, struct usbfs_streams)
+#define IOCTL_USBFS_FREE_STREAMS	_IOR('U', 29, struct usbfs_streams)
+
+extern usbi_mutex_static_t linux_hotplug_lock;
+
+#if defined(HAVE_LIBUDEV)
+int linux_udev_start_event_monitor(void);
+int linux_udev_stop_event_monitor(void);
+int linux_udev_scan_devices(struct libusb_context *ctx);
+void linux_udev_hotplug_poll(void);
+#else
+int linux_netlink_start_event_monitor(void);
+int linux_netlink_stop_event_monitor(void);
+void linux_netlink_hotplug_poll(void);
+#endif
+
+void linux_hotplug_enumerate(uint8_t busnum, uint8_t devaddr, const char *sys_name);
+void linux_device_disconnected(uint8_t busnum, uint8_t devaddr, const char *sys_name);
+
+int linux_get_device_address (struct libusb_context *ctx, int detached,
+	uint8_t *busnum, uint8_t *devaddr, const char *dev_node,
+	const char *sys_name);
+int linux_enumerate_device(struct libusb_context *ctx,
+	uint8_t busnum, uint8_t devaddr, const char *sysfs_dir);
 
 #endif
