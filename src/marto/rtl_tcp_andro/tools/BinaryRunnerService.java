@@ -69,38 +69,39 @@ public class BinaryRunnerService extends Service {
 		return mBinder;
 	}
 	
-	public final static Intent buildStartIntent(final Context ctx, final String args) {
-		final Intent intent = new Intent(ctx, BinaryRunnerService.class);
-		intent.putExtra("args", args);
-		return intent;
-	}
-	
-	@SuppressWarnings("deprecation")
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
+		return START_STICKY;
+	}
 
-		if (intent == null || intent.getStringExtra("args") == null) {
-			Log.appendLine("Service did received null argument.");
-			stopSelf();
-			return START_STICKY;
-		}
-		final String args = intent.getStringExtra("args");
-
+	public void start(String args) {
 		try {
 			
+			if (args == null) {
+				Log.appendLine("Service did receive null argument.");
+				stopForeground(true);
+				System.exit(0);
+				return;
+			}
+
 			accummulated_errors.clear();
-			
+
 			if (RtlTcp.isNativeRunning()) {
 				Log.appendLine("Service is running. Stopping... You can safely start it again now.");
 				final Exception e = new Exception("Service is running. Stopping...");
 				for (final ExceptionListener listener : exception_listeners) listener.onException(e);
 				if (e != null) accummulated_errors.add(e);
-				stopSelf();
-				return START_STICKY;
+				RtlTcp.stop();
+				try {
+					Thread.sleep(500);
+				} catch (Throwable t) {}
+				stopForeground(true);
+				System.exit(0);
+				return;
 			}
 
 			// close any previous attempts and try to reopen
-			
+
 
 			try {
 				wl = null;
@@ -129,10 +130,10 @@ public class BinaryRunnerService extends Service {
 						Log.appendLine("Exit message: "+e.getMessage()+"\n");
 					else
 						Log.appendLine("Exit code: "+exitvalue+"\n");
-	
+
 					for (final ExceptionListener listener : exception_listeners) listener.onException(e);
 					if (e != null) accummulated_errors.add(e);
-					
+
 					stopSelf();
 				}
 
@@ -141,13 +142,12 @@ public class BinaryRunnerService extends Service {
 					for (final ExceptionListener listener : exception_listeners) listener.onStarted();
 					Log.announceStateChanged(true);
 				}
-				
-				
+
+
 			});
 
-			// TODO! GAIN ROOT HERE if root
 			RtlTcp.start(args);
-			
+
 		} catch (Exception e) {
 			for (final ExceptionListener listener : exception_listeners) listener.onException(e);
 			e.printStackTrace();
@@ -155,11 +155,8 @@ public class BinaryRunnerService extends Service {
 		}
 
 		makeForegroundNotification();
-		
-		
-		return START_STICKY;
 	}
-	
+
 	@SuppressWarnings("deprecation")
 	private void makeForegroundNotification() {
 		try {

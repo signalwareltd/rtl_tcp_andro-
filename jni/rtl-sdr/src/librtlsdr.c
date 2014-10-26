@@ -1265,6 +1265,8 @@ uint32_t rtlsdr_get_device_count(void)
 	ssize_t cnt;
 
 	libusb_init(&ctx);
+	if (ctx == NULL)
+		return 0;
 
 	cnt = libusb_get_device_list(ctx, &list);
 

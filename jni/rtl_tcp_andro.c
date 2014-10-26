@@ -436,6 +436,9 @@ void rtltcp_main(int argc, char **argv)
 			if (!(fcntl(usbfd, F_GETFL) != -1 || errno != EBADF)) {
 				aprintf_stderr("Invalid file descriptor %d, - %s", usbfd, strerror(errno));
 				announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_INVALID_FD);
+				pthread_mutex_lock(&running_mutex);
+				is_running = 0;
+				pthread_mutex_unlock(&running_mutex);
 				return;
 			}
 
@@ -443,6 +446,9 @@ void rtltcp_main(int argc, char **argv)
 		default:
 			aprintf_stderr("Unexpected argument '%c' with value '%s' received as an argument", opt, optarg);
 			announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_WRONG_ARGS);
+			pthread_mutex_lock(&running_mutex);
+			is_running = 0;
+			pthread_mutex_unlock(&running_mutex);
 			return;
 		}
 	}
@@ -450,10 +456,22 @@ void rtltcp_main(int argc, char **argv)
 	if (argc < optind) {
 		aprintf_stderr("Expected at least %d arguments, but got %d", optind, argc);
 		announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_WRONG_ARGS);
+		pthread_mutex_lock(&running_mutex);
+		is_running = 0;
+		pthread_mutex_unlock(&running_mutex);
 		return;
 	}
 
 	optind = 0; // this is important since we will look at arguments more than once
+
+	sigact.sa_handler = sighandler;
+	sigemptyset(&sigact.sa_mask);
+	sigact.sa_flags = 0;
+	sigign.sa_handler = SIG_IGN;
+	sigaction(SIGINT, &sigact, NULL);
+	sigaction(SIGTERM, &sigact, NULL);
+	sigaction(SIGQUIT, &sigact, NULL);
+	sigaction(SIGPIPE, &sigign, NULL);
 
 	r = 0;
 	if (usbfd == -1) {
@@ -466,6 +484,9 @@ void rtltcp_main(int argc, char **argv)
 		if (dev_index < 0) {
 			aprintf_stderr("No supported devices found.");
 			announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_NO_DEVICES );
+			pthread_mutex_lock(&running_mutex);
+			is_running = 0;
+			pthread_mutex_unlock(&running_mutex);
 			return;
 		}
 
@@ -478,23 +499,20 @@ void rtltcp_main(int argc, char **argv)
 
 	if (r < 0) {
 		announce_exceptioncode( r );
+		pthread_mutex_lock(&running_mutex);
+		is_running = 0;
+		pthread_mutex_unlock(&running_mutex);
 		return;
 	}
 
 	if (NULL == dev) {
 		aprintf_stderr("Failed to open rtlsdr device #%d.", dev_index);
 		announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_FAILED_TO_OPEN_DEVICE );
+		pthread_mutex_lock(&running_mutex);
+		is_running = 0;
+		pthread_mutex_unlock(&running_mutex);
 		return;
 	}
-
-	sigact.sa_handler = sighandler;
-	sigemptyset(&sigact.sa_mask);
-	sigact.sa_flags = 0;
-	sigign.sa_handler = SIG_IGN;
-	sigaction(SIGINT, &sigact, NULL);
-	sigaction(SIGTERM, &sigact, NULL);
-	sigaction(SIGQUIT, &sigact, NULL);
-	sigaction(SIGPIPE, &sigign, NULL);
 
 	/* Set the tuner error */
 	verbose_ppm_set(dev, ppm_error);

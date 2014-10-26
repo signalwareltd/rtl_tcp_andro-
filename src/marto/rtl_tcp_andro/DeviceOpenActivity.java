@@ -58,6 +58,8 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 	
 	private BinaryRunnerService mService;
     private boolean mBound = false;
+    
+    private String args = null;
 	
 	public static PendingIntent permissionIntent;
 	
@@ -68,6 +70,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 			LocalBinder binder = (LocalBinder) service;
             mService = binder.getService(DeviceOpenActivity.this);
             mBound = true;		
+            mService.start(args);
 		}
 
 		@Override
@@ -207,8 +210,8 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 	public void startBinary(final String arguments) {
 		try {
 			//start the service
-
-			final Intent intent = BinaryRunnerService.buildStartIntent(this, arguments);
+			this.args = arguments;
+			final Intent intent = new Intent(this, BinaryRunnerService.class);
 			startService(intent);
 			bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
 

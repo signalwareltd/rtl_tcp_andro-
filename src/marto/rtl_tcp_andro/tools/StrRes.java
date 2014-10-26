@@ -26,6 +26,7 @@ public class StrRes {
 	public static Resources res;
 
 	public static String get(final int id, final Object ... args) {
+		if (res == null) return "";
 		return String.format(res.getString(id), args);
 	}
 }

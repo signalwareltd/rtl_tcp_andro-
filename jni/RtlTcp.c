@@ -149,6 +149,7 @@ void allocate_args_from_string(const char * string, int nargslength, int * argc,
 
 JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
 (JNIEnv * env, jclass class, jstring args) {
+	LOGI("Starting native code!");
 	(*env)->GetJavaVM(env, &jvm);
 	javaversion = (*env)->GetVersion(env);
 

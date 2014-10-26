@@ -97,9 +97,9 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 			
 			@Override
 			public void onClick(View v) {
+				onoff.setChecked(false);
 				Log.clear();
 				startActivityForResult(new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://"+arguments.getText().toString())), START_REQ_CODE);
-				onoff.setChecked(true);
 			}
 		});
 		
