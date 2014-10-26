@@ -219,12 +219,18 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 	
 	/**
 	 * Announce there is an error. The id of the error could be get with RtlTcpExceptionId
-	 * from the parent activity. See {@link RtlTcpStartException.err_info}
-	 * @param result
+	 * from the parent activity. 
+	 *
+	 * @param id See {@link RtlTcpStartException.err_info}
+	 * @param second_id  See {@link RtlTcpException.id}
+	 * @param second_id  See {@link RtlTcpException#translateToString}
 	 */
-	public void finishWithError(int id) {
+	public void finishWithError(int id, Integer second_id, String msg) {
 		final Intent data = new Intent();
 		data.putExtra("marto.rtl_tcp_andro.RtlTcpExceptionId", id);
+		
+		if (second_id != null) data.putExtra("detailed_exception_code", second_id);
+		if (msg != null) data.putExtra("detailed_exception_message", msg);
 		
 		if (getParent() == null) {
 		    setResult(RESULT_CANCELED, data);
@@ -241,21 +247,30 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 		}
 		if ((e instanceof RtlTcpStartException))
 			finishWithError(((RtlTcpStartException) e).getReason());
-		else if (e instanceof RtlTcpException)
-			finishWithError(((RtlTcpException) e).getReason());
-		else
+		else if (e instanceof RtlTcpException) {
+			final RtlTcpException rtlexception = (RtlTcpException) e;
+			finishWithError(rtlexception.getReason(), rtlexception.id, rtlexception.getMessage());
+		} else
 			finishWithError();
 	}
 	
 	public void finishWithError(final RtlTcpStartException.err_info info) {
+		finishWithError(info, null, null);
+	}
+	
+	public void finishWithError(final RtlTcpStartException.err_info info, Integer second_id, String msg) {
 		if (info != null)
-			finishWithError(info.ordinal());
+			finishWithError(info.ordinal(), second_id, msg);
 		else
-			finishWithError();
+			finishWithError(second_id, msg);
 	}
 	
 	public void finishWithError() {
-		finishWithError(-1);
+		finishWithError(null, null);
+	}
+	
+	public void finishWithError(Integer second_id, String msg) {
+		finishWithError(-1, second_id, msg);
 	}
 	
 	private void finishWithSuccess() {
