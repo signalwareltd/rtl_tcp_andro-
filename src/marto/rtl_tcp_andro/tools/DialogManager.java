@@ -78,7 +78,20 @@ public class DialogManager extends DialogFragment {
 		for (int i = 0; i < elements; i++) args[i] = b.getString("e"+i);		
 		final dialogs id = dialogs.values()[b.getInt("id")];
 		
-		return createDialog(id, args);
+		Dialog dialog = createDialog(id, args);
+		
+		if (dialog != null)
+			return dialog;
+		else
+			return new AlertDialog.Builder(getActivity())
+		.setTitle(R.string.error)
+		.setPositiveButton(R.string.btn_ok, new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				dialog.dismiss();
+			}
+		})
+		.setMessage(R.string.notsupported).create();
 	}
 	
 	/**
@@ -152,39 +165,43 @@ public class DialogManager extends DialogFragment {
 	
 	@SuppressLint("NewApi")
 	private Dialog genUSBDeviceDialog() {
+
 		try {
+			if (!(getActivity() instanceof DeviceOpenActivity)) return null;
+			final DeviceOpenActivity sdrviewer = (DeviceOpenActivity) getActivity();
+
 			final UsbManager manager = (UsbManager) getActivity().getSystemService(Context.USB_SERVICE);
 			final HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
-			final String[] options = new String[deviceList.size()+1];
+			if (deviceList.isEmpty()) {
+				sdrviewer.finishWithError(err_info.no_devices_found);
+				return null;
+			}
+			final String[] options = new String[deviceList.size()];
 			int i = 0;
 			for (final String s : deviceList.keySet())
 				options[i++] = s;
-			
+
 			return new AlertDialog.Builder(getActivity())
-					.setItems(options, new DialogInterface.OnClickListener() {
-						
-						@Override
-						public void onClick(DialogInterface dialog, int which) {
-							if (getActivity() instanceof DeviceOpenActivity) {
-								final DeviceOpenActivity sdrviewer = (DeviceOpenActivity) getActivity();
-								final String selected = options[which];
-								
-								final UsbDevice selected_device = deviceList.get(selected);
-								
-								sdrviewer.openDevice(selected_device);
-							}
-						}
-					})
-					.setOnCancelListener(new AlertDialog.OnCancelListener() {
-						
-						@Override
-						public void onCancel(DialogInterface dialog) {
-							final DeviceOpenActivity sdrviewer = (DeviceOpenActivity) getActivity();
-							sdrviewer.finishWithError(err_info.no_devices_found);
-						}
-					})
-					.setTitle(R.string.choose_device)
-					.create();
+			.setItems(options, new DialogInterface.OnClickListener() {
+
+				@Override
+				public void onClick(DialogInterface dialog, int which) {
+					final String selected = options[which];
+
+					final UsbDevice selected_device = deviceList.get(selected);
+
+					sdrviewer.openDevice(selected_device);
+				}
+			})
+			.setOnCancelListener(new AlertDialog.OnCancelListener() {
+
+				@Override
+				public void onCancel(DialogInterface dialog) {
+					sdrviewer.finishWithError(err_info.no_devices_found);
+				}
+			})
+			.setTitle(R.string.choose_device)
+			.create();
 		} catch (Throwable t) {
 			t.printStackTrace();
 			return null;

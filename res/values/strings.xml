@@ -15,6 +15,9 @@
 	<string name="clear">Clear</string>
 	<string name="force_root">Force root</string>
 	
+	<string name="error">Error</string>
+	<string name="notsupported">The required action was not executed due to being not available.</string>
+	
 	<string name="use_root">Use root access</string>
 	<string name="choose_device">Device Chooser</string>
 	

@@ -109,7 +109,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 		
 		try {
 			UsbPermissionHelper.STATUS res = UsbPermissionHelper.findDevice(DeviceOpenActivity.this, false);
-			
+
 			switch (res) {
 			case SHOW_DEVICE_DIALOG:
 				showDialog(dialogs.DIAG_LIST_USB);
