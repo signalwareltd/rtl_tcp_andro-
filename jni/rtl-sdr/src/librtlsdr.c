@@ -1264,8 +1264,8 @@ uint32_t rtlsdr_get_device_count(void)
 	struct libusb_device_descriptor dd;
 	ssize_t cnt;
 
-	libusb_init(&ctx);
-	if (ctx == NULL)
+	int status = libusb_init(&ctx);
+	if (status != LIBUSB_SUCCESS || ctx == NULL)
 		return 0;
 
 	cnt = libusb_get_device_list(ctx, &list);
@@ -1408,7 +1408,11 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 	memset(dev, 0, sizeof(rtlsdr_dev_t));
 	memcpy(dev->fir, fir_default, sizeof(fir_default));
 
-	libusb_init(&dev->ctx);
+	int status = libusb_init(&dev->ctx);
+	if (status != LIBUSB_SUCCESS)
+		return status;
+	else if (dev->ctx == NULL)
+		return LIBUSB_ERROR_OTHER;
 
 	dev->dev_lost = 1;
 
