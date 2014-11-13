@@ -9,6 +9,9 @@
  *  Modified 2014 Martin Marinov <martintzvetomirov@gmail.com>
  *  - Added function open2 to open a devce from an existing file
  *  descriptor
+ *  - Added a quick fix for Android L by making irrelevant linux_netlink
+ *  and find_usbfs_path
+ *  - Added function init2 to init  from a known device path
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -441,8 +444,112 @@ static int op_init(struct libusb_context *ctx)
 	usbi_mutex_static_lock(&linux_hotplug_startstop_lock);
 	r = LIBUSB_SUCCESS;
 	if (init_count == 0) {
-		/* start up hotplug event handler */
-		r = linux_start_event_monitor();
+		/* start up hotplug event handler if supported */
+		int r = linux_start_event_monitor();
+		if (r != LIBUSB_SUCCESS)
+			usbi_err(ctx, "warning: error starting hotplug event monitor");
+	}
+	if (r == LIBUSB_SUCCESS) {
+		r = linux_scan_devices(ctx);
+		if (r == LIBUSB_SUCCESS)
+			init_count++;
+		else if (init_count == 0)
+			linux_stop_event_monitor();
+	} else
+		usbi_err(ctx, "error starting hotplug event monitor");
+	usbi_mutex_static_unlock(&linux_hotplug_startstop_lock);
+
+	return r;
+}
+
+static int op_init2(struct libusb_context *ctx, const char * uspfs_path_input)
+{
+	struct stat statbuf;
+	int r;
+
+	if (uspfs_path_input == NULL) {
+		return op_init(ctx);
+	}
+
+	const int strlenusbfs = strlen(uspfs_path_input);
+	if (strlenusbfs == 0) {
+		usbi_err(ctx, "usbfs not supplied");
+		return LIBUSB_ERROR_OTHER;
+	}
+
+	usbfs_path = malloc(strlenusbfs+1);
+
+	char * discarded_path = (char *) usbfs_path;
+	strcpy(discarded_path, uspfs_path_input);
+	discarded_path[strlenusbfs] = 0;
+
+	if (monotonic_clkid == -1)
+		monotonic_clkid = find_monotonic_clock();
+
+	if (supports_flag_bulk_continuation == -1) {
+		/* bulk continuation URB flag available from Linux 2.6.32 */
+		supports_flag_bulk_continuation = kernel_version_ge(2,6,32);
+		if (supports_flag_bulk_continuation == -1) {
+			usbi_err(ctx, "error checking for bulk continuation support");
+			return LIBUSB_ERROR_OTHER;
+		}
+	}
+
+	if (supports_flag_bulk_continuation)
+		usbi_dbg("bulk continuation flag supported");
+
+	if (-1 == supports_flag_zero_packet) {
+		/* zero length packet URB flag fixed since Linux 2.6.31 */
+		supports_flag_zero_packet = kernel_version_ge(2,6,31);
+		if (-1 == supports_flag_zero_packet) {
+			usbi_err(ctx, "error checking for zero length packet support");
+			return LIBUSB_ERROR_OTHER;
+		}
+	}
+
+	if (supports_flag_zero_packet)
+		usbi_dbg("zero length packet flag supported");
+
+	if (-1 == sysfs_has_descriptors) {
+		/* sysfs descriptors has all descriptors since Linux 2.6.26 */
+		sysfs_has_descriptors = kernel_version_ge(2,6,26);
+		if (-1 == sysfs_has_descriptors) {
+			usbi_err(ctx, "error checking for sysfs descriptors");
+			return LIBUSB_ERROR_OTHER;
+		}
+	}
+
+	if (-1 == sysfs_can_relate_devices) {
+		/* sysfs has busnum since Linux 2.6.22 */
+		sysfs_can_relate_devices = kernel_version_ge(2,6,22);
+		if (-1 == sysfs_can_relate_devices) {
+			usbi_err(ctx, "error checking for sysfs busnum");
+			return LIBUSB_ERROR_OTHER;
+		}
+	}
+
+	if (sysfs_can_relate_devices || sysfs_has_descriptors) {
+		r = stat(SYSFS_DEVICE_PATH, &statbuf);
+		if (r != 0 || !S_ISDIR(statbuf.st_mode)) {
+			usbi_warn(ctx, "sysfs not mounted");
+			sysfs_can_relate_devices = 0;
+			sysfs_has_descriptors = 0;
+		}
+	}
+
+	if (sysfs_can_relate_devices)
+		usbi_dbg("sysfs can relate devices");
+
+	if (sysfs_has_descriptors)
+		usbi_dbg("sysfs has complete descriptors");
+
+	usbi_mutex_static_lock(&linux_hotplug_startstop_lock);
+	r = LIBUSB_SUCCESS;
+	if (init_count == 0) {
+		/* start up hotplug event handler if supported */
+		int r = linux_start_event_monitor();
+		if (r != LIBUSB_SUCCESS)
+			usbi_err(ctx, "warning: error starting hotplug event monitor");
 	}
 	if (r == LIBUSB_SUCCESS) {
 		r = linux_scan_devices(ctx);
@@ -2688,6 +2795,7 @@ const struct usbi_os_backend linux_usbfs_backend = {
 	.name = "Linux usbfs",
 	.caps = USBI_CAP_HAS_HID_ACCESS|USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER|USBI_CAP_HAS_POLLABLE_DEVICE_FD,
 	.init = op_init,
+	.init2 = op_init2,
 	.exit = op_exit,
 	.get_device_list = NULL,
 	.hotplug_poll = op_hotplug_poll,

@@ -53,6 +53,8 @@ import static marto.rtl_tcp_andro.StreamActivity.PREFS_NAME;
 
 public class DeviceOpenActivity extends FragmentActivity implements BinaryRunnerService.ExceptionListener {
 	
+	private final static String DEFAULT_USPFS_PATH = "/dev/bus/usb";
+	
 	public static Intent intent = null;
 	private String arguments;
 	
@@ -60,6 +62,8 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
     private boolean mBound = false;
     
     private String args = null;
+    private String uspfs_path = null;
+    private int fd = -1;
 	
 	public static PendingIntent permissionIntent;
 	
@@ -70,7 +74,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 			LocalBinder binder = (LocalBinder) service;
             mService = binder.getService(DeviceOpenActivity.this);
             mBound = true;		
-            mService.start(args);
+            mService.start(args, fd, uspfs_path);
 		}
 
 		@Override
@@ -162,6 +166,25 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 		} catch (Throwable t) {t.printStackTrace();};
 	}
 	
+	private final static String properDeviceName(String deviceName) {
+		if (deviceName == null) return DEFAULT_USPFS_PATH;
+		deviceName = deviceName.trim();
+		if (deviceName.isEmpty()) return DEFAULT_USPFS_PATH;
+		
+		final String[] paths = deviceName.split("/");
+		final StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < paths.length-2; i++)
+			if (i == 0)
+				sb.append(paths[i]);
+			else
+				sb.append("/"+paths[i]);
+		final String stripped_name = sb.toString().trim();
+		if (stripped_name.isEmpty())
+			return DEFAULT_USPFS_PATH;
+		else
+			return stripped_name;
+	}
+	
 	/**
 	 * Opens a certain USB device and prepares an argument to be passed to libusb
 	 * @param device
@@ -184,7 +207,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 		if (connection == null)
 			finishWithError(err_info.unknown_error);
 
-		startBinary(arguments + " -h "+connection.getFileDescriptor());	
+		startBinary(arguments, connection.getFileDescriptor(), properDeviceName(device.getDeviceName()));	
 	}
 
 	/**
@@ -199,7 +222,7 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 			finishWithError(e);
 		}
 
-		startBinary(arguments);
+		startBinary(arguments, -1, null);
 	}
 	
 
@@ -207,10 +230,12 @@ public class DeviceOpenActivity extends FragmentActivity implements BinaryRunner
 	/** 
 	 * Starts the tcp binary
 	 */
-	public void startBinary(final String arguments) {
+	public void startBinary(final String arguments, final int fd, final String uspfs_path) {
 		try {
 			//start the service
 			this.args = arguments;
+			this.fd = fd;
+			this.uspfs_path = uspfs_path;
 			final Intent intent = new Intent(this, BinaryRunnerService.class);
 			startService(intent);
 			bindService(intent, mConnection, Context.BIND_AUTO_CREATE);

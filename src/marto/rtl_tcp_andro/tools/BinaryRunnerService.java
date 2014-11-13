@@ -74,7 +74,7 @@ public class BinaryRunnerService extends Service {
 		return START_STICKY;
 	}
 
-	public void start(String args) {
+	public void start(final String args, final int fd, final String uspfs_path) {
 		try {
 			
 			if (args == null) {
@@ -146,7 +146,7 @@ public class BinaryRunnerService extends Service {
 
 			});
 
-			RtlTcp.start(args);
+			RtlTcp.start(args, fd, uspfs_path);
 
 		} catch (Exception e) {
 			for (final ExceptionListener listener : exception_listeners) listener.onException(e);

@@ -54,10 +54,10 @@ extern "C" {
 /*
  * Class:     marto_rtl_tcp_andro_core_RtlTcp
  * Method:    open
- * Signature: (Ljava/lang/String;)V
+ * Signature: (Ljava/lang/String;ILjava/lang/String;)V
  */
 JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
-  (JNIEnv *, jclass, jstring);
+  (JNIEnv *, jclass, jstring, jint, jstring);
 
 /*
  * Class:     marto_rtl_tcp_andro_core_RtlTcp

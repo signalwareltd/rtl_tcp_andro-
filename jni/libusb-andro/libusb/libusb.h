@@ -9,6 +9,7 @@
  *  Modified 2014 Martin Marinov <martintzvetomirov@gmail.com>
  *  - Added function open2 to open a devce from an existing file
  *  descriptor
+ *  - Added function init2 to init libusb context from a given file path
  *
  *
  * This library is free software; you can redistribute it and/or
@@ -1309,6 +1310,7 @@ enum libusb_log_level {
 };
 
 int LIBUSB_CALL libusb_init(libusb_context **ctx);
+int LIBUSB_CALL libusb_init2(libusb_context **ctx, const char * uspfs_path_input);
 void LIBUSB_CALL libusb_exit(libusb_context *ctx);
 void LIBUSB_CALL libusb_set_debug(libusb_context *ctx, int level);
 const struct libusb_version * LIBUSB_CALL libusb_get_version(void);

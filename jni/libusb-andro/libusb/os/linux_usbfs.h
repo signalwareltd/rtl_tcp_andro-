@@ -6,6 +6,7 @@
  * Modified 2014 Martin Marinov <martintzvetomirov@gmail.com>
  *  - Added function open2 to open a devce from an existing file
  *  descriptor
+ *  - Added function init2 to init  from a known device path
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

@@ -44,7 +44,7 @@ public class RtlTcp {
         System.loadLibrary("RtlTcp");
     }
 	
-	private static native void open(final String args);// throws RtlTcpException;
+	private static native void open(final String args, final int fd, final String uspfs_path);// throws RtlTcpException;
 	private static native void close();// throws RtlTcpException;
 	public static native boolean isNativeRunning();
 	
@@ -87,7 +87,7 @@ public class RtlTcp {
 	}
 	
 	
-	public static void start(final String args) throws RtlTcpException {
+	public static void start(final String args, final int fd, final String uspfs_path) throws RtlTcpException {
 		if (isNativeRunning()) {
 			close();
 			try {
@@ -104,7 +104,7 @@ public class RtlTcp {
 				exitcode_set.set(false);
 				exitcode.set(EXIT_UNKNOWN);
 
-				open(args);
+				open(args, fd, uspfs_path);
 
 				if (!exitcode_set.get()) {
 					close();

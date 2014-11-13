@@ -26,7 +26,7 @@
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "rtl_tcp_andro", __VA_ARGS__))
 #endif
 
-void rtltcp_main(int argc, char **argv);
+void rtltcp_main(int usbfd, const char * uspfs_path_input, int argc, char **argv);
 void rtltcp_close();
 int rtltcp_isrunning();
 

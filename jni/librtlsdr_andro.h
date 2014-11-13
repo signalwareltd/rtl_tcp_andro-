@@ -29,6 +29,6 @@
 extern "C" {
 #endif
 
-RTLSDR_API int rtlsdr_open2(rtlsdr_dev_t **out_dev, uint32_t index, int fd);
+RTLSDR_API int rtlsdr_open2(rtlsdr_dev_t **out_dev, uint32_t index, int fd, const char * uspfs_path_input);
 
 #endif /* __RTL_ANDRO_SDR_H */

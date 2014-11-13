@@ -148,7 +148,7 @@ void allocate_args_from_string(const char * string, int nargslength, int * argc,
 }
 
 JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
-(JNIEnv * env, jclass class, jstring args) {
+(JNIEnv * env, jclass class, jstring args, jint fd, jstring uspfs_path) {
 	LOGI("Starting native code!");
 	(*env)->GetJavaVM(env, &jvm);
 	javaversion = (*env)->GetVersion(env);
@@ -157,14 +157,16 @@ JNIEXPORT void JNICALL Java_marto_rtl_1tcp_1andro_core_RtlTcp_open
 	cls = (jclass) (*env)->NewGlobalRef(env, class);
 
 	const char *nargs = (*env)->GetStringUTFChars(env, args, 0);
+	const char * n_uspfs_path = (uspfs_path == NULL) ? (NULL) : ((*env)->GetStringUTFChars(env, uspfs_path, 0));
 	const int nargslength = (*env)->GetStringLength(env, args);
 	int argc = 0;
 	char ** argv;
 
 	allocate_args_from_string(nargs, nargslength, &argc, &argv);
-	rtltcp_main(argc, argv);
+	rtltcp_main(fd, n_uspfs_path, argc, argv);
 
 	(*env)->ReleaseStringUTFChars(env, args, nargs);
+	if (uspfs_path != NULL) (*env)->ReleaseStringUTFChars(env, uspfs_path, n_uspfs_path);
 
 	int i;
 	for (i = 0; i < argc; i++) free(argv[i]);

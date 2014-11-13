@@ -38,7 +38,7 @@
  * and should be ready to go. This allows communicating with a rtl-sdr dongle that has
  * its file descriptor already open.
  */
-int rtlsdr_open2(rtlsdr_dev_t **out_dev, uint32_t index, int fd)
+int rtlsdr_open2(rtlsdr_dev_t **out_dev, uint32_t index, int fd, const char * uspfs_path_input)
 {
 	int r;
 	int i;
@@ -57,7 +57,7 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, uint32_t index, int fd)
 	memset(dev, 0, sizeof(rtlsdr_dev_t));
 	memcpy(dev->fir, fir_default, sizeof(fir_default));
 
-	int status = libusb_init(&dev->ctx);
+	int status = libusb_init2(&dev->ctx, uspfs_path_input);
 	if (status != LIBUSB_SUCCESS)
 		return status;
 	else if (dev->ctx == NULL)

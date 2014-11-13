@@ -8,6 +8,7 @@
  *  Modified 2014 Martin Marinov <martintzvetomirov@gmail.com>
  *  - Added function open2 to open a devce from an existing file
  *  descriptor
+ *  - Added function init2 to init libusb context from a given file path
  *
  *
  * This library is free software; you can redistribute it and/or
@@ -1911,6 +1912,115 @@ void API_EXPORTED libusb_set_debug(libusb_context *ctx, int level)
 	USBI_GET_CONTEXT(ctx);
 	if (!ctx->debug_fixed)
 		ctx->debug = level;
+}
+
+int API_EXPORTED libusb_init2(libusb_context **context, const char * uspfs_path_input)
+{
+	struct libusb_device *dev, *next;
+	char *dbg = getenv("LIBUSB_DEBUG");
+	struct libusb_context *ctx;
+	static int first_init = 1;
+	int r = 0;
+
+	usbi_mutex_static_lock(&default_context_lock);
+
+	if (!timestamp_origin.tv_sec) {
+		usbi_gettimeofday(&timestamp_origin, NULL);
+	}
+
+	if (!context && usbi_default_context) {
+		usbi_dbg("reusing default context");
+		default_context_refcnt++;
+		usbi_mutex_static_unlock(&default_context_lock);
+		return 0;
+	}
+
+	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx) {
+		r = LIBUSB_ERROR_NO_MEM;
+		goto err_unlock;
+	}
+
+#ifdef ENABLE_DEBUG_LOGGING
+	ctx->debug = LIBUSB_LOG_LEVEL_DEBUG;
+#endif
+
+	if (dbg) {
+		ctx->debug = atoi(dbg);
+		if (ctx->debug)
+			ctx->debug_fixed = 1;
+	}
+
+	/* default context should be initialized before calling usbi_dbg */
+	if (!usbi_default_context) {
+		usbi_default_context = ctx;
+		default_context_refcnt++;
+		usbi_dbg("created default context");
+	}
+
+	usbi_dbg("libusb v%d.%d.%d.%d", libusb_version_internal.major, libusb_version_internal.minor,
+		libusb_version_internal.micro, libusb_version_internal.nano);
+
+	usbi_mutex_init(&ctx->usb_devs_lock, NULL);
+	usbi_mutex_init(&ctx->open_devs_lock, NULL);
+	usbi_mutex_init(&ctx->hotplug_cbs_lock, NULL);
+	list_init(&ctx->usb_devs);
+	list_init(&ctx->open_devs);
+	list_init(&ctx->hotplug_cbs);
+
+	usbi_mutex_static_lock(&active_contexts_lock);
+	if (first_init) {
+		first_init = 0;
+		list_init (&active_contexts_list);
+	}
+	list_add (&ctx->list, &active_contexts_list);
+	usbi_mutex_static_unlock(&active_contexts_lock);
+
+	if (usbi_backend->init2) {
+		r = usbi_backend->init2(ctx, uspfs_path_input);
+		if (r)
+			goto err_free_ctx;
+	}
+
+	r = usbi_io_init(ctx);
+	if (r < 0)
+		goto err_backend_exit;
+
+	usbi_mutex_static_unlock(&default_context_lock);
+
+	if (context)
+		*context = ctx;
+
+	return 0;
+
+err_backend_exit:
+	if (usbi_backend->exit)
+		usbi_backend->exit();
+err_free_ctx:
+	if (ctx == usbi_default_context) {
+		usbi_default_context = NULL;
+		default_context_refcnt--;
+	}
+
+	usbi_mutex_static_lock(&active_contexts_lock);
+	list_del (&ctx->list);
+	usbi_mutex_static_unlock(&active_contexts_lock);
+
+	usbi_mutex_lock(&ctx->usb_devs_lock);
+	list_for_each_entry_safe(dev, next, &ctx->usb_devs, list, struct libusb_device) {
+		list_del(&dev->list);
+		libusb_unref_device(dev);
+	}
+	usbi_mutex_unlock(&ctx->usb_devs_lock);
+
+	usbi_mutex_destroy(&ctx->open_devs_lock);
+	usbi_mutex_destroy(&ctx->usb_devs_lock);
+	usbi_mutex_destroy(&ctx->hotplug_cbs_lock);
+
+	free(ctx);
+err_unlock:
+	usbi_mutex_static_unlock(&default_context_lock);
+	return r;
 }
 
 /** \ingroup lib

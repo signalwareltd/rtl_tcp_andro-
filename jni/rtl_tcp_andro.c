@@ -368,10 +368,9 @@ int rtltcp_isrunning() {
 	return isit_running;
 }
 
-void rtltcp_main(int argc, char **argv)
+void rtltcp_main(int usbfd, const char * uspfs_path_input, int argc, char **argv)
 {
 	int r, opt;
-	int usbfd = -1;
 	char* addr = "127.0.0.1";
 	int port = 1234;
 	uint32_t frequency = 100000000, samp_rate = 2048000;
@@ -391,15 +390,25 @@ void rtltcp_main(int argc, char **argv)
 	fd_set readfds;
 	dongle_info_t dongle_info;
 
+
 	pthread_mutex_lock(&running_mutex);
 	is_running = 1;
 	pthread_mutex_unlock(&running_mutex);
+
+	if (usbfd != -1 && (!(fcntl(usbfd, F_GETFL) != -1 || errno != EBADF))) {
+		aprintf_stderr("Invalid file descriptor %d, - %s", usbfd, strerror(errno));
+		announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_INVALID_FD);
+		pthread_mutex_lock(&running_mutex);
+		is_running = 0;
+		pthread_mutex_unlock(&running_mutex);
+		return;
+	}
 
 	init_all_variables();
 
 	struct sigaction sigact, sigign;
 
-	while ((opt = getopt(argc, argv, "a:p:f:g:s:b:n:d:P:h:")) != -1) {
+	while ((opt = getopt(argc, argv, "a:p:f:g:s:b:n:d:P:")) != -1) {
 		switch (opt) {
 		case 'd':
 			dev_index = verbose_device_search(optarg);
@@ -428,20 +437,6 @@ void rtltcp_main(int argc, char **argv)
 			break;
 		case 'P':
 			ppm_error = atoi(optarg);
-			break;
-		case 'h':
-
-			usbfd = atoi(optarg); //get_from_client(optarg);
-
-			if (!(fcntl(usbfd, F_GETFL) != -1 || errno != EBADF)) {
-				aprintf_stderr("Invalid file descriptor %d, - %s", usbfd, strerror(errno));
-				announce_exceptioncode(marto_rtl_tcp_andro_core_RtlTcp_EXIT_INVALID_FD);
-				pthread_mutex_lock(&running_mutex);
-				is_running = 0;
-				pthread_mutex_unlock(&running_mutex);
-				return;
-			}
-
 			break;
 		default:
 			aprintf_stderr("Unexpected argument '%c' with value '%s' received as an argument", opt, optarg);
@@ -492,8 +487,8 @@ void rtltcp_main(int argc, char **argv)
 
 		r = rtlsdr_open(&dev, dev_index);
 	} else {
-		aprintf("Opening device with fd %d", usbfd);
-		r = rtlsdr_open2(&dev, dev_index, usbfd);
+		aprintf("Opening device with fd %d at %s", usbfd, uspfs_path_input);
+		r = rtlsdr_open2(&dev, dev_index, usbfd, uspfs_path_input);
 	}
 
 
