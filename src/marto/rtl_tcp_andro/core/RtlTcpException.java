@@ -57,7 +57,8 @@ public class RtlTcpException extends Exception {
 			return StrRes.get(R.string.exception_UNKNOWN);
 		case RtlTcp.EXIT_SIGNAL_CAUGHT:
 			return StrRes.get(R.string.exception_SIGNAL_CAUGHT);
-
+		case RtlTcp.EXIT_NOT_ENOUGH_POWER:
+			return StrRes.get(R.string.exception_NOT_ENOUGH_POWER);
 
 		default:
 			return StrRes.get(R.string.exception_DEFAULT, id);
@@ -111,7 +112,8 @@ public class RtlTcpException extends Exception {
 			return err_info.unknown_error;
 		case RtlTcp.EXIT_SIGNAL_CAUGHT:
 			return err_info.unknown_error;
-
+		case RtlTcp.EXIT_NOT_ENOUGH_POWER:
+			return err_info.unknown_error;
 
 		default:
 			return null;

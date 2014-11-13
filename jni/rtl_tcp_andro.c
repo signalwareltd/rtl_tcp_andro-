@@ -514,8 +514,14 @@ void rtltcp_main(int usbfd, const char * uspfs_path_input, int argc, char **argv
 
 	/* Set the sample rate */
 	r = rtlsdr_set_sample_rate(dev, samp_rate);
-	if (r < 0)
+	if (r < 0) {
 		aprintf_stderr("WARNING: Failed to set sample rate.");
+		announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_NOT_ENOUGH_POWER );
+		pthread_mutex_lock(&running_mutex);
+		is_running = 0;
+		pthread_mutex_unlock(&running_mutex);
+		return;
+	}
 
 	/* Set the frequency */
 	r = rtlsdr_set_center_freq(dev, frequency);
@@ -545,8 +551,14 @@ void rtltcp_main(int usbfd, const char * uspfs_path_input, int argc, char **argv
 
 	/* Reset endpoint before we start reading from it (mandatory) */
 	r = rtlsdr_reset_buffer(dev);
-	if (r < 0)
+	if (r < 0) {
 		aprintf_stderr("WARNING: Failed to reset buffers.");
+		announce_exceptioncode( marto_rtl_tcp_andro_core_RtlTcp_EXIT_FAILED_TO_OPEN_DEVICE );
+		pthread_mutex_lock(&running_mutex);
+		is_running = 0;
+		pthread_mutex_unlock(&running_mutex);
+		return;
+	}
 
 	memset(&local,0,sizeof(local));
 	local.sin_family = AF_INET;

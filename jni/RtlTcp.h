@@ -51,6 +51,8 @@ extern "C" {
 #define marto_rtl_tcp_andro_core_RtlTcp_EXIT_UNKNOWN 7L
 #undef marto_rtl_tcp_andro_core_RtlTcp_EXIT_SIGNAL_CAUGHT
 #define marto_rtl_tcp_andro_core_RtlTcp_EXIT_SIGNAL_CAUGHT 8L
+#undef marto_rtl_tcp_andro_core_RtlTcp_EXIT_NOT_ENOUGH_POWER
+#define marto_rtl_tcp_andro_core_RtlTcp_EXIT_NOT_ENOUGH_POWER 9L
 /*
  * Class:     marto_rtl_tcp_andro_core_RtlTcp
  * Method:    open

@@ -32,6 +32,7 @@ public class RtlTcp {
 	final static int EXIT_CANNOT_CLOSE = 6;
 	final static int EXIT_UNKNOWN = 7;
 	final static int EXIT_SIGNAL_CAUGHT = 8;
+	final static int EXIT_NOT_ENOUGH_POWER = 9;
 	
 	private final static Object locker = new Object();
 	private final static Object exitcode_locker = new Object();

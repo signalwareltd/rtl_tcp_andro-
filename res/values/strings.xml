@@ -54,5 +54,6 @@
     <string name="exception_CANNOT_CLOSE">Internal error: Cannot stop service</string>
     <string name="exception_UNKNOWN">Unknown error!</string>
     <string name="exception_SIGNAL_CAUGHT">Signal was caught!</string>
+    <string name="exception_NOT_ENOUGH_POWER">Your Android device does not provide enough power to the dongle. You must use an externally powered USB hub or an externally powered USB OTG cable.</string>
     
 </resources>
