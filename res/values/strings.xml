@@ -48,7 +48,7 @@
     <string name="exception_OK">No exception :)</string>
     <string name="exception_WRONG_ARGS">Wrong arguments were supplied! Please, check the rtl_tcp manual!</string>
     <string name="exception_INVALID_FD">Invalid USB file descriptor passed via Java.</string>
-    <string name="exception_NO_DEVICES">No compatible devices found (make sure your USB device is connected, properly powered and your phone/tablet supports USB host mode)</string>
+    <string name="exception_NO_DEVICES">No compatible devices found (make sure your USB device is connected, properly powered and your phone/tablet supports USB host mode). If you don\'t think your device supports root, make sure the force root option in the driver app is NOT enabled.</string>
     <string name="exception_FAILED_TO_OPEN_DEVICE">Device was found but cannot be open. This may indicate that your phone/tablet needs to be rooted. If it is rooted already, then make sure you have given SU permissions to the driver.</string>
     <string name="exception_CANNOT_RESTART">Internal error: Cannot restart service</string>
     <string name="exception_CANNOT_CLOSE">Internal error: Cannot stop service</string>

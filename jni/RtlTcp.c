@@ -63,6 +63,7 @@ void aprintf_stderr( const char* format , ... ) {
 		jmethodID method = (*env)->GetStaticMethodID(env, cls, "printf_stderr_receiver", "(Ljava/lang/String;)V");
 		jstring jdata = (*env)->NewStringUTF(env, data);
 		(*env)->CallStaticVoidMethod(env, cls, method, jdata);
+		(*env)->DeleteLocalRef(env, jdata);
 	}
 
 	pthread_mutex_unlock(&cli_sprintf_lock);
@@ -90,6 +91,7 @@ void aprintf( const char* format , ... ) {
 		jmethodID method = (*env)->GetStaticMethodID(env, cls, "printf_receiver", "(Ljava/lang/String;)V");
 		jstring jdata = (*env)->NewStringUTF(env, data);
 		(*env)->CallStaticVoidMethod(env, cls, method, jdata);
+		(*env)->DeleteLocalRef(env, jdata);
 	}
 
 	pthread_mutex_unlock(&cli_sprintf_lock);

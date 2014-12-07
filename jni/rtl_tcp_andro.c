@@ -287,60 +287,60 @@ static void command_worker(void *arg)
 		}
 		switch(cmd.cmd) {
 		case 0x01:
-			aprintf("set freq %d", ntohl(cmd.param));
+			//aprintf("set freq %d", ntohl(cmd.param));
 			rtlsdr_set_center_freq(dev,ntohl(cmd.param));
 			break;
 		case 0x02:
-			aprintf("set sample rate %d", ntohl(cmd.param));
+			//aprintf("set sample rate %d", ntohl(cmd.param));
 			rtlsdr_set_sample_rate(dev, ntohl(cmd.param));
 			break;
 		case 0x03:
-			aprintf("set gain mode %d", ntohl(cmd.param));
+			//aprintf("set gain mode %d", ntohl(cmd.param));
 			rtlsdr_set_tuner_gain_mode(dev, ntohl(cmd.param));
 			break;
 		case 0x04:
-			aprintf("set gain %d", ntohl(cmd.param));
+			//aprintf("set gain %d", ntohl(cmd.param));
 			rtlsdr_set_tuner_gain(dev, ntohl(cmd.param));
 			break;
 		case 0x05:
-			aprintf("set freq correction %d", ntohl(cmd.param));
+			//aprintf("set freq correction %d", ntohl(cmd.param));
 			rtlsdr_set_freq_correction(dev, ntohl(cmd.param));
 			break;
 		case 0x06:
 			tmp = ntohl(cmd.param);
-			aprintf("set if stage %d gain %d", tmp >> 16, (short)(tmp & 0xffff));
+			//aprintf("set if stage %d gain %d", tmp >> 16, (short)(tmp & 0xffff));
 			rtlsdr_set_tuner_if_gain(dev, tmp >> 16, (short)(tmp & 0xffff));
 			break;
 		case 0x07:
-			aprintf("set test mode %d", ntohl(cmd.param));
+			//aprintf("set test mode %d", ntohl(cmd.param));
 			rtlsdr_set_testmode(dev, ntohl(cmd.param));
 			break;
 		case 0x08:
-			aprintf("set agc mode %d", ntohl(cmd.param));
+			//aprintf("set agc mode %d", ntohl(cmd.param));
 			rtlsdr_set_agc_mode(dev, ntohl(cmd.param));
 			break;
 		case 0x09:
-			aprintf("set direct sampling %d", ntohl(cmd.param));
+			//aprintf("set direct sampling %d", ntohl(cmd.param));
 			rtlsdr_set_direct_sampling(dev, ntohl(cmd.param));
 			break;
 		case 0x0a:
-			aprintf("set offset tuning %d", ntohl(cmd.param));
+			//aprintf("set offset tuning %d", ntohl(cmd.param));
 			rtlsdr_set_offset_tuning(dev, ntohl(cmd.param));
 			break;
 		case 0x0b:
-			aprintf("set rtl xtal %d", ntohl(cmd.param));
+			//aprintf("set rtl xtal %d", ntohl(cmd.param));
 			rtlsdr_set_xtal_freq(dev, ntohl(cmd.param), 0);
 			break;
 		case 0x0c:
-			aprintf("set tuner xtal %d", ntohl(cmd.param));
+			//aprintf("set tuner xtal %d", ntohl(cmd.param));
 			rtlsdr_set_xtal_freq(dev, 0, ntohl(cmd.param));
 			break;
 		case 0x0d:
-			aprintf("set tuner gain by index %d", ntohl(cmd.param));
+			//aprintf("set tuner gain by index %d", ntohl(cmd.param));
 			set_gain_by_index(dev, ntohl(cmd.param));
 			break;
 		case 0x7e:
-			aprintf("client requested to close rtl_tcp_andro");
+			//aprintf("client requested to close rtl_tcp_andro");
 			sighandler(0);
 			break;
 		case 0x7f:
