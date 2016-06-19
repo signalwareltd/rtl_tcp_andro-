@@ -182,9 +182,16 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync__JIIJJIILjava_lang_String
         }
     }
 
-    if (samplingrate < 0 || rtlsdr_set_sample_rate(device, (uint32_t) samplingrate) < 0) {
+    int result = 0;
+    if (samplingrate < 0 || (result = rtlsdr_set_sample_rate(device, (uint32_t) samplingrate)) < 0) {
         LOGI("ERROR: Failed to set sample rate to %lld", samplingrate);
-        RUN_OR(EXIT_WRONG_ARGS, goto err);
+        // LIBUSB_ERROR_IO is -1
+        // LIBUSB_ERROR_TIMEOUT is -7
+        if (result == -1 || result == -7) {
+            RUN_OR(EXIT_NOT_ENOUGH_POWER, goto err);
+        } else {
+            RUN_OR(EXIT_WRONG_ARGS, goto err);
+        }
     } else {
         LOGI("Set sampling rate to %lld", samplingrate);
     }
