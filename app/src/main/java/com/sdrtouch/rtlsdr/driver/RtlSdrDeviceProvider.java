@@ -37,8 +37,7 @@ import marto.rtl_tcp_andro.R;
 public class RtlSdrDeviceProvider implements SdrDeviceProvider {
     @Override
     public List<SdrDevice> listDevices(Context ctx, boolean forceRoot) {
-        // Numbers in xml files are saved as 10 radix numbers, therefore providing radix 10 here
-        Set<UsbDevice> availableUsbDevices = UsbPermissionHelper.getAvailableUsbDevices(RtlSdrApplication.getAppContext(), R.xml.device_filter, 10);
+        Set<UsbDevice> availableUsbDevices = UsbPermissionHelper.getAvailableUsbDevices(RtlSdrApplication.getAppContext(), R.xml.device_filter);
         List<SdrDevice> devices = new LinkedList<>();
         for (UsbDevice usbDevice : availableUsbDevices) devices.add(new RtlSdrDevice(usbDevice));
         return devices;

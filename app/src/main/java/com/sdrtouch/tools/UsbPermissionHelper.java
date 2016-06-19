@@ -56,12 +56,12 @@ public class UsbPermissionHelper {
 	}
 
 	/** This method is safe to be called from old Android versions */
-	public static Set<UsbDevice> getAvailableUsbDevices(final Context ctx, int xmlResourceId, int numberRadix) {
+	public static Set<UsbDevice> getAvailableUsbDevices(final Context ctx, int xmlResourceId) {
 		Set<UsbDevice> usbDevices = new HashSet<>();
 		if (isAndroidUsbSupported) {
 			final UsbManager manager = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
 
-			final HashSet<Pair<Integer, Integer>> allowed = getDeviceData(ctx.getResources(), xmlResourceId, numberRadix);
+			final HashSet<Pair<Integer, Integer>> allowed = getDeviceData(ctx.getResources(), xmlResourceId);
 			final HashMap<String, UsbDevice> deviceList = manager.getDeviceList();
 
 			for (final Entry<String, UsbDevice> desc : deviceList.entrySet()) {
@@ -73,7 +73,7 @@ public class UsbPermissionHelper {
 		return usbDevices;
 	}
 
-	private static HashSet<Pair<Integer, Integer>> getDeviceData(final Resources resources, int xmlResourceId, int numberRadix) {
+	private static HashSet<Pair<Integer, Integer>> getDeviceData(final Resources resources, int xmlResourceId) {
 		final HashSet<Pair<Integer, Integer>> ans = new HashSet<>();
 		try {
 			final XmlResourceParser xml = resources.getXml(xmlResourceId);
@@ -86,8 +86,8 @@ public class UsbPermissionHelper {
 				case XmlPullParser.START_TAG:
 					if (xml.getName().equals("usb-device")) {
 						final AttributeSet as = Xml.asAttributeSet(xml);
-						final Integer vendorId = Integer.valueOf( as.getAttributeValue(null, "vendor-id"), numberRadix);
-						final Integer productId = Integer.valueOf( as.getAttributeValue(null, "product-id"), numberRadix);
+						final Integer vendorId = parseInt( as.getAttributeValue(null, "vendor-id"));
+						final Integer productId = parseInt( as.getAttributeValue(null, "product-id"));
 						ans.add(new Pair<>(vendorId, productId));
 					}
 					break;
@@ -99,5 +99,13 @@ public class UsbPermissionHelper {
 		}
 
 		return ans;
+	}
+
+	private static Integer parseInt(String number) {
+		if (number.startsWith("0x")) {
+			return Integer.valueOf( number.substring(2), 16);
+		} else {
+			return Integer.valueOf( number, 10);
+		}
 	}
 }
