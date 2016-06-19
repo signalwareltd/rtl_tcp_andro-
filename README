@@ -30,4 +30,5 @@ http://sdr.osmocom.org/trac/wiki/rtl-sdr
 For more information on libusb: 
 http://www.libusb.org/wiki/libusb-1.0
 
-
+Based on modifications on libusb:
+https://github.com/kuldeepdhaka/libusb
