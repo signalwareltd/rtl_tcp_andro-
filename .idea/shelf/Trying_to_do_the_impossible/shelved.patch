@@ -1,0 +1,291 @@
+Index: libusb/src/main/jni/libusb/libusb.h
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- libusb/src/main/jni/libusb/libusb.h	(date 1465856476000)
++++ libusb/src/main/jni/libusb/libusb.h	(revision )
+@@ -1301,7 +1301,7 @@
+ 	LIBUSB_LOG_LEVEL_DEBUG,
+ };
+ 
+-int LIBUSB_CALL libusb_init2(libusb_context **ctx);
++int LIBUSB_CALL libusb_init2(libusb_context **context, int fd, const char * path);
+ int LIBUSB_CALL libusb_init(libusb_context **ctx);
+ void LIBUSB_CALL libusb_exit(libusb_context *ctx);
+ void LIBUSB_CALL libusb_set_debug(libusb_context *ctx, int level);
+Index: libusb/src/main/jni/libusb/core.c
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- libusb/src/main/jni/libusb/core.c	(date 1465856476000)
++++ libusb/src/main/jni/libusb/core.c	(revision )
+@@ -2031,7 +2031,7 @@
+ 		ctx->debug = level;
+ }
+ 
+-int API_EXPORTED libusb_init2(libusb_context **context)
++int API_EXPORTED libusb_init2(libusb_context **context, int fd, const char * path)
+ {
+ 	struct libusb_device *dev, *next;
+ 	char *dbg = getenv("LIBUSB_DEBUG");
+@@ -2093,8 +2093,8 @@
+ 	list_add (&ctx->list, &active_contexts_list);
+ 	usbi_mutex_static_unlock(&active_contexts_lock);
+ 
+-	if (usbi_backend->init) {
+-		r = usbi_backend->init(ctx);
++	if (usbi_backend->init2) {
++		r = usbi_backend->init2(ctx, fd, path);
+ 		if (r)
+ 			goto err_free_ctx;
+ 	}
+Index: libusb/src/main/jni/libusb/libusbi.h
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- libusb/src/main/jni/libusb/libusbi.h	(date 1465856476000)
++++ libusb/src/main/jni/libusb/libusbi.h	(revision )
+@@ -311,6 +311,10 @@
+ 	/* A list of pending completed transfers. Protected by event_data_lock. */
+ 	struct list_head completed_transfers;
+ 
++	/* Android only */
++	unsigned int android_fd;
++	unsigned char * android_path;
++
+ #ifdef USBI_TIMERFD_AVAILABLE
+ 	/* used for timeout handling, if supported by OS.
+ 	 * this timerfd is maintained to trigger on the next pending timeout */
+@@ -581,6 +585,8 @@
+ 	 * Return 0 on success, or a LIBUSB_ERROR code on failure.
+ 	 */
+ 	int (*init)(struct libusb_context *ctx);
++
++	int (*init2)(struct libusb_context *ctx, int fd, const char * path);
+ 
+ 	/* Deinitialization. Optional. This function should destroy anything
+ 	 * that was set up by init.
+Index: libusb/src/main/jni/libusb/os/linux_usbfs.c
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- libusb/src/main/jni/libusb/os/linux_usbfs.c	(date 1465856476000)
++++ libusb/src/main/jni/libusb/os/linux_usbfs.c	(revision )
+@@ -130,6 +130,7 @@
+ static int linux_start_event_monitor(void);
+ static int linux_stop_event_monitor(void);
+ static int linux_scan_devices(struct libusb_context *ctx);
++static int linux_scan_devices2(struct libusb_context *ctx, int fd, const char * path);
+ static int sysfs_scan_device(struct libusb_context *ctx, const char *devname);
+ static int detach_kernel_driver_and_claim(struct libusb_device_handle *, int);
+ 
+@@ -374,6 +375,121 @@
+ 	return ksublevel >= sublevel;
+ }
+ 
++static char * find_usbfs_path_android(const char * path) {
++	static char USB_PATH_BUFFER[256];
++
++	int rem = 2;
++	char * pathcopy;
++
++	memset(USB_PATH_BUFFER, 0, sizeof USB_PATH_BUFFER);
++	for (pathcopy = ((char *) path) + strlen(path); pathcopy >= path; pathcopy--) {
++		if (*pathcopy == '/' && --rem == 0) break;
++	}
++
++	return strncpy(USB_PATH_BUFFER, path, pathcopy-path);
++}
++
++static int op_init2(struct libusb_context *ctx, int fd, const char * path)
++{
++	struct stat statbuf;
++	int r;
++
++	usbfs_path = find_usbfs_path_android(path);
++	if (!usbfs_path) {
++		usbi_err(ctx, "could not find usbfs");
++		return LIBUSB_ERROR_OTHER;
++	} else {
++		usbi_dbg("Usb path is %s", usbfs_path);
++	}
++
++	if (monotonic_clkid == -1)
++		monotonic_clkid = find_monotonic_clock();
++
++	if (supports_flag_bulk_continuation == -1) {
++		/* bulk continuation URB flag available from Linux 2.6.32 */
++		supports_flag_bulk_continuation = kernel_version_ge(2,6,32);
++		if (supports_flag_bulk_continuation == -1) {
++			usbi_err(ctx, "error checking for bulk continuation support");
++			return LIBUSB_ERROR_OTHER;
++		}
++	}
++
++	if (supports_flag_bulk_continuation)
++		usbi_dbg("bulk continuation flag supported");
++
++	if (-1 == supports_flag_zero_packet) {
++		/* zero length packet URB flag fixed since Linux 2.6.31 */
++		supports_flag_zero_packet = kernel_version_ge(2,6,31);
++		if (-1 == supports_flag_zero_packet) {
++			usbi_err(ctx, "error checking for zero length packet support");
++			return LIBUSB_ERROR_OTHER;
++		}
++	}
++
++	if (supports_flag_zero_packet)
++		usbi_dbg("zero length packet flag supported");
++
++	if (-1 == sysfs_has_descriptors) {
++		/* sysfs descriptors has all descriptors since Linux 2.6.26 */
++		sysfs_has_descriptors = kernel_version_ge(2,6,26);
++		if (-1 == sysfs_has_descriptors) {
++			usbi_err(ctx, "error checking for sysfs descriptors");
++			return LIBUSB_ERROR_OTHER;
++		}
++	}
++
++	if (-1 == sysfs_can_relate_devices) {
++		/* sysfs has busnum since Linux 2.6.22 */
++		sysfs_can_relate_devices = kernel_version_ge(2,6,22);
++		if (-1 == sysfs_can_relate_devices) {
++			usbi_err(ctx, "error checking for sysfs busnum");
++			return LIBUSB_ERROR_OTHER;
++		}
++	}
++
++	if (sysfs_can_relate_devices || sysfs_has_descriptors) {
++		r = stat(SYSFS_DEVICE_PATH, &statbuf);
++		if (r != 0 || !S_ISDIR(statbuf.st_mode)) {
++			usbi_warn(ctx, "sysfs not mounted");
++			sysfs_can_relate_devices = 0;
++			sysfs_has_descriptors = 0;
++		}
++	}
++
++	if (sysfs_can_relate_devices)
++		usbi_dbg("sysfs can relate devices");
++
++	if (sysfs_has_descriptors) {
++		sysfs_has_descriptors = 0;
++		usbi_dbg("sysfs has complete descriptors. However disabling due to Android limitations.");
++	}
++
++	usbi_mutex_static_lock(&linux_hotplug_startstop_lock);
++	r = LIBUSB_SUCCESS;
++	if (init_count == 0) {
++#if defined(__ANDROID__)
++		if(linux_start_event_monitor() !=  LIBUSB_SUCCESS) {
++			usbi_warn(ctx, "unable to starting hotplug event monitor. Android 5+?");
++		}
++#else
++		/* start up hotplug event handler */
++		r = linux_start_event_monitor();
++#endif
++	}
++	if (r == LIBUSB_SUCCESS) {
++		r = linux_scan_devices2(ctx, fd, path);
++		if (r == LIBUSB_SUCCESS)
++			init_count++;
++		else if (init_count == 0)
++			linux_stop_event_monitor();
++	} else {
++		usbi_err(ctx, "error starting hotplug event monitor");
++	}
++	usbi_mutex_static_unlock(&linux_hotplug_startstop_lock);
++
++	return r;
++}
++
+ static int op_init(struct libusb_context *ctx)
+ {
+ 	struct stat statbuf;
+@@ -523,6 +639,35 @@
+ 	return ret;
+ }
+ 
++static int parseBusnumDevnumFromPath(const char * path, int * busnum, int * devnum) {
++	int rem = 2;
++	char * pathcopy;
++
++	for (pathcopy = ((char *) path) + strlen(path); pathcopy >= path; pathcopy--) {
++		if (*pathcopy == '/' && --rem == 0) break;
++	}
++
++	return sscanf(pathcopy, "/%d/%d", busnum, devnum) == 2;
++}
++
++static int linux_scan_devices2(struct libusb_context *ctx, int fd, const char * path)
++{
++	int busnum, devnum;
++	int ret = -1;
++
++	usbi_mutex_static_lock(&linux_hotplug_lock);
++
++	if (parseBusnumDevnumFromPath(path, &busnum, &devnum)) {
++		ret = linux_enumerate_device(ctx, (uint8_t) busnum, (uint8_t) devnum, NULL);
++	} else {
++		usbi_err("Cannot parse bus number and device number from %s", path);
++	}
++
++	usbi_mutex_static_unlock(&linux_hotplug_lock);
++
++	return ret;
++}
++
+ static void op_hotplug_poll(void)
+ {
+ #if defined(USE_UDEV)
+@@ -1100,17 +1245,22 @@
+ 	if (!dev)
+ 		return LIBUSB_ERROR_NO_MEM;
+ 
++	usbi_dbg("Initializing device");
+ 	r = initialize_device(dev, busnum, devaddr, sysfs_dir);
+ 	if (r < 0)
+ 		goto out;
++
++	usbi_dbg("Sanitazing device");
+ 	r = usbi_sanitize_device(dev);
+ 	if (r < 0)
+ 		goto out;
+ 
++	usbi_dbg("Get parent info");
+ 	r = linux_get_parent_info(dev, sysfs_dir);
+ 	if (r < 0)
+ 		goto out;
+ out:
++	usbi_dbg("Out with r %d", r);
+ 	if (r < 0)
+ 		libusb_unref_device(dev);
+ 	else
+@@ -2720,6 +2870,7 @@
+ 	.name = "Linux usbfs",
+ 	.caps = USBI_CAP_HAS_HID_ACCESS|USBI_CAP_SUPPORTS_DETACH_KERNEL_DRIVER,
+ 	.init = op_init,
++	.init2 = op_init2,
+ 	.exit = op_exit,
+ 	.get_device_list = NULL,
+ 	.hotplug_poll = op_hotplug_poll,
+Index: app/src/main/jni/rtlsdrdevice.c
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- app/src/main/jni/rtlsdrdevice.c	(date 1465856476000)
++++ app/src/main/jni/rtlsdrdevice.c	(revision )
+@@ -24,7 +24,7 @@
+     const char *devicePath = (*env)->GetStringUTFChars(env, devicePath_, 0);
+     const char *address = (*env)->GetStringUTFChars(env, address_, 0);
+ 
+-    int status = libusb_init2(&dev->libusbContext);
++    int status = libusb_init2(&dev->libusbContext, fd, devicePath);
+     LOGI("loadNativeDevice, libusb returned %d", status);
+     dev->device = libusb_get_device2(dev->libusbContext, devicePath);
+     // TODO! EXCEPTION
+\ No newline at end of file

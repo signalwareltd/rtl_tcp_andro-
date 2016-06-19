@@ -18,7 +18,7 @@ Possible bugs:
  - Once the client closes, rtl_tcp closes with it. This is a desired behavior on Android but probably undesired if used for a client. 
  
 Note: 
-The rtl-sdr folder is completely unmodified. Therefore if a new version of rtl-sdr is released, just replace this folder with the newer version and recompile - everything should work out of the box if the rtlsdr_open function is unchanged. If the rtlsdr_open was modified in the new version, you would need to update rtl_tcp_andro.c and the rtlsdr_open2 function.
+The rtl-sdr folder is completely unmodified. Therefore if a new version of rtl-sdr is released, just replace this folder with the newer version and recompile - everything should work out of the box. 
  
 Files modified in libusb-1.0 to create libusb-andro: 
  core.c, libusb.h and libusbi.h - to header for and implementation of the open2 function which takes an already open file descriptor 
@@ -26,6 +26,7 @@ Files modified in libusb-1.0 to create libusb-andro:
  
 Compilation: 
 To compile for Android, use the Android.mk file in the jni directory 
+To compile for Linux invoke make. Binary will be created in the current directory 
  
 The modifications are released under GNU. See COPYING for details. 
  
@@ -33,4 +34,4 @@ For more information on rtl-sdr:
 http://sdr.osmocom.org/trac/wiki/rtl-sdr 
  
 For more information on libusb: 
-http://www.libusb.org/
+http://www.libusb.org/wiki/libusb-1.0
