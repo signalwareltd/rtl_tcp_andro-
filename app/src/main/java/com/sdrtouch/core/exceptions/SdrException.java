@@ -39,6 +39,7 @@ public class SdrException extends Exception {
 	public final static int EXIT_UNKNOWN = 7;
 	public final static int EXIT_SIGNAL_CAUGHT = 8;
 	public final static int EXIT_NOT_ENOUGH_POWER = 9;
+	public final static int EXIT_PLATFORM_NOT_SUPPORTED = 10;
 	
 	private static final long serialVersionUID = 9112234577039075951L;
 	private final int id;
@@ -93,7 +94,8 @@ public class SdrException extends Exception {
 			return StrRes.get(R.string.exception_SIGNAL_CAUGHT);
 		case EXIT_NOT_ENOUGH_POWER:
 			return StrRes.get(R.string.exception_NOT_ENOUGH_POWER);
-
+		case EXIT_PLATFORM_NOT_SUPPORTED:
+			return StrRes.get(R.string.platform_not_supported);
 		default:
 			return StrRes.get(R.string.exception_DEFAULT, id);
 		}
@@ -148,7 +150,8 @@ public class SdrException extends Exception {
 			return err_info.unknown_error;
 		case EXIT_NOT_ENOUGH_POWER:
 			return err_info.unknown_error;
-
+		case EXIT_PLATFORM_NOT_SUPPORTED:
+			return err_info.unknown_error;
 		default:
 			return null;
 		}

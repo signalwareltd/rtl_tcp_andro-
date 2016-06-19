@@ -24,8 +24,17 @@ import android.app.Application;
 import android.content.Context;
 
 public class RtlSdrApplication extends Application {
+    public final static boolean IS_PLATFORM_SUPPORTED;
+
     static {
-        System.loadLibrary("rtlSdrAndroid");
+        boolean isPlatformSupported = false;
+        try {
+            System.loadLibrary("rtlSdrAndroid");
+            isPlatformSupported = true;
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
+        IS_PLATFORM_SUPPORTED = isPlatformSupported;
     }
 
     private static Context context;

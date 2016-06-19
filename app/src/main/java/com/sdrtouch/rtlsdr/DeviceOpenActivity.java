@@ -77,6 +77,11 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		Log.clear();
+
+		if (!RtlSdrApplication.IS_PLATFORM_SUPPORTED) {
+			finishWithError(new SdrException(SdrException.EXIT_PLATFORM_NOT_SUPPORTED));
+			return;
+		}
 		
 		setContentView(R.layout.progress);
 

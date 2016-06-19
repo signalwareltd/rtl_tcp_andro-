@@ -169,6 +169,10 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 				StreamActivity.this.showDialog(dialogs.DIAG_ABOUT);
 			}
 		});
+
+		if (!RtlSdrApplication.IS_PLATFORM_SUPPORTED) {
+			((TextView) findViewById(R.id.warntext)).setText(R.string.platform_not_supported);
+		}
 	}
 
 	public void showDialog(final DialogManager.dialogs id, final String ... args) {
