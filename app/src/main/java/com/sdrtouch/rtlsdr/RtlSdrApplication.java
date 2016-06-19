@@ -23,6 +23,8 @@ package com.sdrtouch.rtlsdr;
 import android.app.Application;
 import android.content.Context;
 
+import com.sdrtouch.tools.StrRes;
+
 public class RtlSdrApplication extends Application {
     public final static boolean IS_PLATFORM_SUPPORTED;
 
@@ -41,6 +43,8 @@ public class RtlSdrApplication extends Application {
 
     public void onCreate() {
         super.onCreate();
+
+        StrRes.res = getResources();
         RtlSdrApplication.context = getApplicationContext();
     }
 

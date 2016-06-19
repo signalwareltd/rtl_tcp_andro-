@@ -42,7 +42,6 @@ import com.sdrtouch.rtlsdr.driver.RtlSdrDeviceProvider;
 import com.sdrtouch.tools.DeviceDialog;
 import com.sdrtouch.tools.ExceptionTools;
 import com.sdrtouch.tools.Log;
-import com.sdrtouch.tools.StrRes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -84,8 +83,6 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		}
 		
 		setContentView(R.layout.progress);
-
-		StrRes.res = getResources();
 		
 		final Uri data = getIntent().getData();
 		try {
