@@ -45,7 +45,7 @@ model {
                         excludes.add("**/rtl_tcp.c")
                     }
                     dependencies {
-                        project ":libusb"
+                        project ":libusb" linkage "static"
                     }
                 }
             }
