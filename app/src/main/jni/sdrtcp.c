@@ -42,6 +42,12 @@
 #define RETURN_SUCCESS { return 1; }
 #define RETURN_AND_CLOSE { sdrtcp_cleanup(obj); return; }
 
+typedef struct {
+    char magic[4];
+    uint32_t dongleType;
+    uint32_t gainsCount;
+} dongle_info_t;
+
 static void sdrtcp_cleanup(sdrtcp_t * obj) {
     pthread_mutex_lock(&obj->state_locker);
     if (obj->state != STAGE_UNINITIALIZED) {
@@ -226,7 +232,7 @@ static void tcp_server(void *arg) {
     pthread_exit(NULL);
 }
 
-int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port) {
+int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port, const char * dongleMagic, uint32_t dongleType, uint32_t gainsCount) {
     if (obj->state != STAGE_UNINITIALIZED) {
         LOGI("SdrTcp: Called sdrtcp_open_socket with unexpected state %d", obj->state);
         RETURN_FAILURE;
@@ -237,6 +243,21 @@ int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port) {
     pthread_mutex_lock(&obj->state_locker);
     pool_init(&obj->workpool, POOL_MAX_ELEMENTS, EXTBUFF_TYPE_USHORT);
     pool_set_threads(&obj->workpool, 2);
+
+    dongle_info_t dongle_info;
+    memset(&dongle_info, 0, sizeof(dongle_info));
+    memcpy(&dongle_info.magic, dongleMagic, 4);
+    dongle_info.dongleType = htonl(dongleType);
+    dongle_info.gainsCount = htonl(gainsCount);
+
+    // Send the dongle info as the first thing
+    extbuffer_t * buff = NULL;
+    if ((buff = pool_get_wait_lock(&obj->workpool, 0, 1)) != NULL) {
+        extbuffer_preparetohandle(buff, sizeof(dongle_info) / sizeof(uint16_t));
+        memcpy((void *) buff->ushortbuffer, (void *) &dongle_info, sizeof(dongle_info));
+        pool_get_unlock(&obj->workpool, 0, buff);
+    }
+
     obj->state = STAGE_INITIALIZED;
     pthread_mutex_unlock(&obj->state_locker);
 

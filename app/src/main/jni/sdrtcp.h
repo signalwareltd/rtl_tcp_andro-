@@ -54,7 +54,8 @@ void sdrtcp_init(sdrtcp_t * obj);
 void sdrtcp_free(sdrtcp_t * obj);
 
 // Opens socket. If this returns true then we are ready to wait for client
-int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port);
+// dongleMagic must be exactly 4 characters long!
+int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port, const char * dongleMagic, uint32_t dongleType, uint32_t gainsCount);
 
 
 // Starts waiting for and feeding a client asynchroneously

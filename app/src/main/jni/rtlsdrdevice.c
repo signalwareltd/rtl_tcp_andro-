@@ -218,7 +218,7 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync__JIIJJIILjava_lang_String
     if (rtlsdr_reset_buffer(device) < 0)
         LOGI("WARNING: Failed to reset buffers");
 
-    if (!sdrtcp_open_socket(&dev->tcpserv, address, port)) {
+    if (!sdrtcp_open_socket(&dev->tcpserv, address, port, "RTL0", rtlsdr_get_tuner_type(device), (uint32_t) rtlsdr_get_tuner_gains(device, NULL))) {
         RUN_OR(EXIT_WRONG_ARGS, goto err);
     }
 
