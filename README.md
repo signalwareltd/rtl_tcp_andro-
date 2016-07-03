@@ -37,14 +37,14 @@ startActivityForResult(intent, 1234);
     }
 ```
 
-* `supportedTcpCommands` contains a list of TCP commands that are supported. Information about them could be found in [tcp_commands.h](blob/master/app/src/main/jni/tcp_commands.h). This value may not be set on old versions of the driver, so keep that in mind!
-* `errmsg` is an explanation of why the driver did not start in English. The reason is also passed as an integer in  `detailed_exception_code` for programmatic access. More information in [DeviceOpenActivity.java](blob/master/app/src/main/java/com/sdrtouch/rtlsdr/DeviceOpenActivity.java).
+* `supportedTcpCommands` contains a list of TCP commands that are supported. Information about them could be found in [tcp_commands.h](/app/src/main/jni/tcp_commands.h). This value may not be set on old versions of the driver, so keep that in mind!
+* `errmsg` is an explanation of why the driver did not start in English. The reason is also passed as an integer in  `detailed_exception_code` for programmatic access. More information in [DeviceOpenActivity.java](/app/src/main/java/com/sdrtouch/rtlsdr/DeviceOpenActivity.java).
 
 ## TCP client
 
 Once a *RESULT_OK* has been returned, you have to connect to the driver with a TCP client using the localhost and the port you have provided. Your client will start receiving IQ samples. By default each sample consists of two 8 bit unsigned bytes - one for the I and one for the Q part of the sample. Now you can use these samples for whatever reason you like!
 
-If you want to control the tuner, such as set the central frequency, you can send TCP commands consisting of an unsigned 8 bit byte control code (defined in [tcp_commands.h](blob/master/app/src/main/jni/tcp_commands.h)) bundled with a 32 bit unsigned parameter. Most rtl-tcp commands are supported, however there are a couple of additional Android specific ones.
+If you want to control the tuner, such as set the central frequency, you can send TCP commands consisting of an unsigned 8 bit byte control code (defined in [tcp_commands.h](/app/src/main/jni/tcp_commands.h)) bundled with a 32 bit unsigned parameter. Most rtl-tcp commands are supported, however there are a couple of additional Android specific ones.
 
 *Note:* Non-rtl-tcp drivers (such as the SDRplay one) can only support a sub-set of the rtl-tcp commands. You can learn about the list of supported commands via the `supportedTcpCommands` array. Drivers like SDRplay can also support extended commands for additional features, ex. such as 16 bit sample size. You must use this array to learn whether a command is supported before using it, otherwise it will have no effect.
 
@@ -73,7 +73,7 @@ Files modified in libusb-1.0 to create libusb-andro:
  core.c, libusb.h and libusbi.h - to header for and implementation of the open2 function which takes an already open file descriptor 
  linux_usbfs.c - to create a libusb handle from the fd 
 
-The modifications are released under GNU. See [COPYING](blob/master/COPYING) for details. 
+The modifications are released under GNU. See [COPYING](/COPYING) for details. 
  
 For more information on rtl-sdr: 
 http://sdr.osmocom.org/trac/wiki/rtl-sdr 
