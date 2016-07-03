@@ -24,6 +24,7 @@
 #include "rtl-sdr-android.h"
 #include "sdrtcp.h"
 #include "SdrException.h"
+#include "tcp_commands.h"
 
 #define RUN_OR(command, exit_command) { \
     int cmd_result = command; \
@@ -83,69 +84,88 @@ static int set_gain_by_perc(rtlsdr_dev_t *_dev, unsigned int percent)
     return res;
 }
 
+static jint SUPPORTED_COMMANDS[] = {
+        TCP_SET_FREQ,
+        TCP_SET_SAMPLE_RATE,
+        TCP_SET_GAIN_MODE,
+        TCP_SET_GAIN,
+        TCP_SET_FREQ_CORRECTION,
+        TCP_SET_IF_TUNER_GAIN,
+        TCP_SET_TEST_MODE,
+        TCP_SET_AGC_MODE,
+        TCP_SET_DIRECT_SAMPLING,
+        TCP_SET_OFFSET_TUNING,
+        TCP_SET_RTL_XTAL,
+        TCP_SET_TUNER_XTAL,
+        TCP_SET_TUNER_GAIN_BY_ID,
+        TCP_ANDROID_EXIT,
+        TCP_ANDROID_GAIN_BY_PERCENTAGE
+};
+
 void tcpCommandCallback(sdrtcp_t * tcpserv, void * pointer, sdr_tcp_command_t * cmd) {
     WITH_DEV(dev);
     if (dev->rtl_dev == NULL) return;
 
     switch(cmd->command) {
-        case 0x01:
+        case TCP_SET_FREQ:
             rtlsdr_set_center_freq(dev->rtl_dev,cmd->parameter);
             break;
-        case 0x02:
+        case TCP_SET_SAMPLE_RATE:
             LOGI("set sample rate %ld", cmd->parameter);
             rtlsdr_set_sample_rate(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x03:
+        case TCP_SET_GAIN_MODE:
             LOGI("set gain mode %ld", cmd->parameter);
             rtlsdr_set_tuner_gain_mode(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x04:
+        case TCP_SET_GAIN:
             LOGI("set gain %ld", cmd->parameter);
             rtlsdr_set_tuner_gain(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x05:
+        case TCP_SET_FREQ_CORRECTION:
             LOGI("set freq correction %ld", cmd->parameter);
             rtlsdr_set_freq_correction(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x06:
+        case TCP_SET_IF_TUNER_GAIN:
             rtlsdr_set_tuner_if_gain(dev->rtl_dev, cmd->parameter >> 16, (short)(cmd->parameter & 0xffff));
             break;
-        case 0x07:
+        case TCP_SET_TEST_MODE:
             LOGI("set test mode %ld", cmd->parameter);
             rtlsdr_set_testmode(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x08:
+        case TCP_SET_AGC_MODE:
             LOGI("set agc mode %ld", cmd->parameter);
             rtlsdr_set_agc_mode(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x09:
+        case TCP_SET_DIRECT_SAMPLING:
             LOGI("set direct sampling %ld", cmd->parameter);
             rtlsdr_set_direct_sampling(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x0a:
+        case TCP_SET_OFFSET_TUNING:
             LOGI("set offset tuning %ld", cmd->parameter);
             rtlsdr_set_offset_tuning(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x0b:
+        case TCP_SET_RTL_XTAL:
             LOGI("set rtl xtal %d", cmd->parameter);
             rtlsdr_set_xtal_freq(dev->rtl_dev, cmd->parameter, 0);
             break;
-        case 0x0c:
+        case TCP_SET_TUNER_XTAL:
             LOGI("set tuner xtal %dl", cmd->parameter);
             rtlsdr_set_xtal_freq(dev->rtl_dev, 0, cmd->parameter);
             break;
-        case 0x0d:
+        case TCP_SET_TUNER_GAIN_BY_ID:
             LOGI("set tuner gain by index %d", cmd->parameter);
             set_gain_by_index(dev->rtl_dev, cmd->parameter);
             break;
-        case 0x7e:
+        case TCP_ANDROID_EXIT:
             LOGI("tcpCommandCallback: client requested to close rtl_tcp_andro");
             sdrtcp_stop_serving_client(tcpserv);
             break;
-        case 0x7f:
+        case TCP_ANDROID_GAIN_BY_PERCENTAGE:
             set_gain_by_perc(dev->rtl_dev, cmd->parameter);
             break;
         default:
+            // don't forget to add any new commands into SUPPORTED_COMMANDS!
             break;
     }
 }
@@ -276,4 +296,16 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_close__J(JNIEnv *env, jobject insta
                                                       jlong pointer) {
     WITH_DEV(dev);
     sdrtcp_stop_serving_client(&dev->tcpserv);
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_getSupportedCommands(JNIEnv *env, jobject instance) {
+    jint * commands = (jint *) SUPPORTED_COMMANDS;
+    int n_commands = sizeof(SUPPORTED_COMMANDS) / sizeof(SUPPORTED_COMMANDS[0]);
+
+    jintArray result;
+    result = (*env)->NewIntArray(env, n_commands);
+    if (result == NULL) return NULL;
+
+    (*env)->SetIntArrayRegion(env, result, 0, n_commands, commands);
+    return result;
 }

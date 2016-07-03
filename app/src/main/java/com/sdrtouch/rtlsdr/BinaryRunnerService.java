@@ -91,7 +91,7 @@ public class BinaryRunnerService extends Service {
 	
 	private final OnStatusListener onStatusListener = new OnStatusListener() {
 		@Override
-		public void onOpen() {
+		public void onOpen(SdrDevice sdrDevice) {
 			Log.appendLine("The rtl-tcp implementation is running and is ready to accept clients");
 			ackquireWakeLock();
 		}

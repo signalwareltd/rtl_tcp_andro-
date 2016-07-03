@@ -58,9 +58,11 @@ public abstract class SdrDevice implements Serializable {
 	@UsedByJni
 	protected void announceOnOpen() {
 		synchronized (listeners) {
-			for (OnStatusListener listener: listeners) listener.onOpen();
+			for (OnStatusListener listener: listeners) listener.onOpen(this);
 		}
 	}
+
+	public abstract int[] getSupportedCommands();
 	
 	/**
 	 * This should return as soon as possible.
@@ -73,7 +75,7 @@ public abstract class SdrDevice implements Serializable {
 	
 	/**
 	 * When anyone asks to close the rtl-tcp. This implementation doesn't need to block until the device is closed.
-	 * You must also call {@link #announceOnClosed(Exception)} with a null argument to indicate successful closure.
+	 * You must also call {@link #announceOnClosed(Throwable)} with a null argument to indicate successful closure.
 	 */
 	public abstract void close();
 	
@@ -92,7 +94,7 @@ public abstract class SdrDevice implements Serializable {
 		/** 
 		 * When the rtl-tcp compatible service has been successfully started 
 		 */
-		void onOpen();
+		void onOpen(SdrDevice sdrDevice);
 		
 		/**
 		 * When the rtl-tcp compatible service has been destroyed.

@@ -185,8 +185,8 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	
 	private final SdrDevice.OnStatusListener onDeviceStatusListener = new  SdrDevice.OnStatusListener() {
 		@Override
-		public void onOpen() {
-			finishWithSuccess();
+		public void onOpen(SdrDevice sdrDevice) {
+			finishWithSuccess(sdrDevice);
 		}
 
 		@Override
@@ -253,8 +253,9 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		finishWithError(-1, second_id, msg);
 	}
 	
-	private void finishWithSuccess() {
+	private void finishWithSuccess(SdrDevice sdrDevice) {
 		final Intent data = new Intent();
+		data.putExtra("supportedTcpCommands", sdrDevice.getSupportedCommands());
 		
 		if (getParent() == null) {
 		    setResult(RESULT_OK, data);

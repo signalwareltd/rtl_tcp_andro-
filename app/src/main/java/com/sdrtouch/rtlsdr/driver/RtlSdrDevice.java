@@ -91,4 +91,7 @@ public class RtlSdrDevice extends SdrDevice {
     private native void close(long pointer);
     private native void deInit(long pointer);
     private native boolean openAsync(long pointer, int fd, int gain, long samplingrate, long frequency, int port, int ppm, String address, String devicePath) throws RtlSdrException;
+
+    @Override
+    public native int[] getSupportedCommands();
 }
