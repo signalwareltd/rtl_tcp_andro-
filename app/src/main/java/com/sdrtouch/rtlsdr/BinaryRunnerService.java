@@ -20,13 +20,16 @@
 
 package com.sdrtouch.rtlsdr;
 
+import android.app.Notification;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.support.v7.app.NotificationCompat;
 import android.util.Pair;
+
 import com.sdrtouch.core.SdrTcpArguments;
 import com.sdrtouch.core.devices.SdrDevice;
 import com.sdrtouch.core.devices.SdrDevice.OnStatusListener;
@@ -38,10 +41,13 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Set;
 
+import marto.rtl_tcp_andro.R;
+
 public class BinaryRunnerService extends Service {
 	private static final String TAG = "rtl_tcp_andro";
+	private final static int ONGOING_NOTIFICATION_ID = 438903919; // random id
 
-    private PowerManager.WakeLock wl = null;
+	private PowerManager.WakeLock wl = null;
 
 	private final IBinder mBinder = new LocalBinder();
 	private boolean isRunning = false;
@@ -86,7 +92,16 @@ public class BinaryRunnerService extends Service {
 			announceRunning(thisSdrDevice);
 			thisSdrDevice.addOnStatusListener(onStatusListener);
 			thisSdrDevice.openAsync(this, sdrTcpArguments);
+			startForeground();
 		}
+	}
+
+	private void startForeground() {
+		Notification notification = new NotificationCompat.Builder(this)
+				.setContentTitle(getText(R.string.app_name))
+				.build();
+
+		startForeground(ONGOING_NOTIFICATION_ID, notification);
 	}
 	
 	private final OnStatusListener onStatusListener = new OnStatusListener() {
