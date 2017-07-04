@@ -15,7 +15,7 @@ Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://-a 127
 startActivityForResult(intent, 1234);
 ```
 
-*Note:* It is possible that the user doesn't have the driver installed and this invocation can throw a [ActivityNotFound](https://developer.android.com/reference/android/content/ActivityNotFoundException.html) exception. In such a case you should ask the user to consider installing the RTL-SDR driver from https://play.google.com/store/apps/details?id=marto.rtl_tcp_andro .
+*Note:* It is possible that the user doesn't have the driver installed and this invocation can throw a [ActivityNotFound](https://developer.android.com/reference/android/content/ActivityNotFoundException.html) exception. In such a case you should ask the user to consider installing the RTL-SDR driver from https://play.google.com/store/apps/details?id=marto.rtl_tcp_andro or http://www.amazon.com/gp/mas/dl/android?p=marto.rtl_tcp_andro .
 
 *Advanced note:* There might be multiple sdr drivers installed on the device that can handle this protocol (ex. if the user has the SDRplay driver at the same time). This will mean the user will be asked to chose which driver to use. If they click the "always use this app" option in the chooser, they will be stuck with only one of the drivers being called for the *iqsrc* intent, leaving the other driver idle forever. To avoid this poor user experience, your app should use [PackageManager::queryIntentActivities](https%3A%2F%2Fdeveloper.android.com%2Freference%2Fandroid%2Fcontent%2Fpm%2FPackageManager.html%23queryIntentActivities(android.content.Intent%2C%20int)) to enumerate installed apps that support *iqsrc*. Your app can then go trough the list and ask each of them to open a device until it finds one that returns *RESULT_OK*.
 
@@ -50,7 +50,8 @@ If you want to control the tuner, such as set the central frequency, you can sen
 
 # Compatible apps
 
-* [SDR Touch](https://play.google.com/store/apps/details?id=marto.androsdr2)
+* [SDR Touch (Google Play)](https://play.google.com/store/apps/details?id=marto.androsdr2)
+* [SDR Touch (Amazon)](http://www.amazon.com/gp/mas/dl/android?p=marto.androsdr2.a)
 * [Wavesink DAB/FM](https://play.google.com/store/apps/details?id=de.ses.wavesink)
 * [RF Analyzer](https://play.google.com/store/apps/details?id=com.mantz_it.rfanalyzer)
 * [welle.io](https://play.google.com/store/apps/details?id=io.welle.welle)
