@@ -51,18 +51,18 @@ import marto.rtl_tcp_andro.R;
 public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog.OnDeviceDialog {
 	
 	private final static SdrDeviceProvider[] SDR_DEVICE_PROVIDERS = new SdrDeviceProvider[] { new RtlSdrDeviceProvider() };
-    
+
 	private SdrTcpArguments sdrTcpArguments;
 	private SdrDevice sdrDevice;
 
-    private boolean isBound = false;
+	private boolean isBound = false;
 	private final ServiceConnection mConnection = new ServiceConnection() {
 
 		@Override
 		public void onServiceConnected(ComponentName name, IBinder ibinder) {
 			isBound = true;
 			LocalBinder binder = (LocalBinder) ibinder;
-            binder.startWithDevice(sdrDevice, sdrTcpArguments);
+			binder.startWithDevice(sdrDevice, sdrTcpArguments);
 		}
 
 		@Override
@@ -70,7 +70,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 			isBound = false;
 			finishWithError();
 		}
-    };
+	};
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -83,7 +83,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		}
 		
 		setContentView(R.layout.progress);
-		
+
 		final Uri data = getIntent().getData();
 		try {
 			sdrTcpArguments = SdrTcpArguments.fromString(data.toString().replace("iqsrc://", ""));
@@ -153,7 +153,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		try {
 			dialog.show(ft, "dialog");
 		} catch (Throwable t) {t.printStackTrace();}
-    }
+	}
 	
 	/** 
 	 * Starts the tcp binary
@@ -206,9 +206,9 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		if (msg != null) data.putExtra("detailed_exception_message", msg);
 		
 		if (getParent() == null) {
-		    setResult(RESULT_CANCELED, data);
+			setResult(RESULT_CANCELED, data);
 		} else {
-		    getParent().setResult(RESULT_CANCELED, data);
+			getParent().setResult(RESULT_CANCELED, data);
 		}
 		finish();
 	}
@@ -233,9 +233,9 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 			finishWithError(err_info, id, null);
 			return;
 		}
-        Log.appendLine("Caught exception "+ExceptionTools.getNicelyFormattedTrace(e));
+		Log.appendLine("Caught exception "+ExceptionTools.getNicelyFormattedTrace(e));
 		e.printStackTrace();
-        finishWithError(err_info, id, e.getMessage());
+		finishWithError(err_info, id, e.getMessage());
 	}
 	
 	public void finishWithError(final err_info info, Integer second_id, String msg) {
@@ -258,9 +258,9 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		data.putExtra("supportedTcpCommands", sdrDevice.getSupportedCommands());
 		
 		if (getParent() == null) {
-		    setResult(RESULT_OK, data);
+			setResult(RESULT_OK, data);
 		} else {
-		    getParent().setResult(RESULT_OK, data);
+			getParent().setResult(RESULT_OK, data);
 		}
 		
 		Log.appendLine("Device was open. Closing the prompt activity.");
