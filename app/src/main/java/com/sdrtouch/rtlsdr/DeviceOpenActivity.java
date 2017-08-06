@@ -255,7 +255,9 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	
 	private void finishWithSuccess(SdrDevice sdrDevice) {
 		final Intent data = new Intent();
-		data.putExtra("supportedTcpCommands", sdrDevice.getSupportedCommands());
+		// SDR device
+		data.putExtra(BinaryRunnerService.EXTRA_SUPPORTED_TCP_CMDS, sdrDevice.getSupportedCommands());
+		data.putExtra(BinaryRunnerService.EXTRA_DEVICE_NAME, sdrDevice.getName());
 		
 		if (getParent() == null) {
 			setResult(RESULT_OK, data);

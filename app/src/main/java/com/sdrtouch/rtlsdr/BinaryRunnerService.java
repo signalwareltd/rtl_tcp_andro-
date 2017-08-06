@@ -22,8 +22,12 @@ package com.sdrtouch.rtlsdr;
 
 import android.app.Notification;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -44,6 +48,17 @@ import java.util.Set;
 import marto.rtl_tcp_andro.R;
 
 public class BinaryRunnerService extends Service {
+    public static final String ACTION_SDR_DEVICE_ATTACHED = "com.sdrtouch.rtlsdr.SDR_DEVICE_ATTACHED";
+    public static final String ACTION_SDR_DEVICE_DETACHED = "com.sdrtouch.rtlsdr.SDR_DEVICE_DETACHED";
+    public static final String EXTRA_DEVICE_NAME = "deviceName";
+    public static final String EXTRA_SUPPORTED_TCP_CMDS = "supportedTcpCommands";
+    public static final String EXTRA_GAIN = "gain";
+    public static final String EXTRA_SAMPLERATE = "samplerate";
+    public static final String EXTRA_FREQUENCY = "frequency";
+    public static final String EXTRA_ADDRESS = "address";
+    public static final String EXTRA_PORT = "port";
+    public static final String EXTRA_PPM = "ppm";
+
 	private static final String TAG = "rtl_tcp_andro";
 	private final static int ONGOING_NOTIFICATION_ID = 438903919; // random id
 
@@ -60,11 +75,28 @@ public class BinaryRunnerService extends Service {
 		return mBinder;
 	}
 
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+
+        // Register receiver
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        registerReceiver(broadcastReceiver, filter);
+    }
+
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		startWithDevice();
 		return START_NOT_STICKY;
 	}
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(broadcastReceiver);
+    }
 
 	private void addWork(SdrDevice sdrDevice, SdrTcpArguments arguments) {
 		synchronized (workQueue) {
@@ -133,6 +165,29 @@ public class BinaryRunnerService extends Service {
 			startWithDevice();
 		}
 	};
+
+    private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            Log.appendLine(TAG + " onReceive: " + action);
+
+            if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                UsbDevice usbDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                Log.appendLine("USB detached: " + usbDevice.getDeviceName());
+                if (thisSdrDevice != null && thisSdrDevice.getName().equals(usbDevice.getDeviceName())) {
+                    Log.appendLine("USB close");
+
+                    Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
+                    // USB device
+                    bIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
+                    // SDR device
+                    bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
+                    sendBroadcast(bIntent);
+                }
+            }
+        }
+    };
 
 	@SuppressWarnings("deprecation")
 	private void ackquireWakeLock() {

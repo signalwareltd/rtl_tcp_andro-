@@ -56,6 +56,18 @@
         </activity>
 
         <activity
+            android:name="com.sdrtouch.rtlsdr.UsbDelegate"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>
+            </intent-filter>
+
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+        </activity>
+
+        <activity
             android:name="com.sdrtouch.rtlsdr.StreamActivity"
             android:label="@string/app_name" >
             <intent-filter>

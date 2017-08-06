@@ -36,7 +36,7 @@ public abstract class Log {
 
 	@UsedByJni
 	public static void appendLine(String what) {
-		android.util.Log.d("Log", what);
+		android.util.Log.d("RtlSdr", what);
 		while (what.charAt(what.length()-1) == '\n') {
 			what = what.substring(0, what.length()-1);
 		}
