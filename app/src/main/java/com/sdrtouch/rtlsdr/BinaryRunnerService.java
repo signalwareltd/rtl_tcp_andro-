@@ -52,12 +52,6 @@ public class BinaryRunnerService extends Service {
     public static final String ACTION_SDR_DEVICE_DETACHED = "com.sdrtouch.rtlsdr.SDR_DEVICE_DETACHED";
     public static final String EXTRA_DEVICE_NAME = "deviceName";
     public static final String EXTRA_SUPPORTED_TCP_CMDS = "supportedTcpCommands";
-    public static final String EXTRA_GAIN = "gain";
-    public static final String EXTRA_SAMPLERATE = "samplerate";
-    public static final String EXTRA_FREQUENCY = "frequency";
-    public static final String EXTRA_ADDRESS = "address";
-    public static final String EXTRA_PORT = "port";
-    public static final String EXTRA_PPM = "ppm";
 
 	private static final String TAG = "rtl_tcp_andro";
 	private final static int ONGOING_NOTIFICATION_ID = 438903919; // random id

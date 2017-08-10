@@ -24,6 +24,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -38,6 +40,7 @@ import com.sdrtouch.core.devices.SdrDeviceProvider;
 import com.sdrtouch.core.exceptions.SdrException;
 import com.sdrtouch.core.exceptions.SdrException.err_info;
 import com.sdrtouch.rtlsdr.BinaryRunnerService.LocalBinder;
+import com.sdrtouch.rtlsdr.driver.RtlSdrDevice;
 import com.sdrtouch.rtlsdr.driver.RtlSdrDeviceProvider;
 import com.sdrtouch.tools.DeviceDialog;
 import com.sdrtouch.tools.ExceptionTools;
@@ -54,6 +57,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 
 	private SdrTcpArguments sdrTcpArguments;
 	private SdrDevice sdrDevice;
+	private UsbDevice usbDevice;
 
 	private boolean isBound = false;
 	private final ServiceConnection mConnection = new ServiceConnection() {
@@ -84,9 +88,16 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		
 		setContentView(R.layout.progress);
 
-		final Uri data = getIntent().getData();
+		Intent intent = getIntent();
+		final Uri data = intent.getData();
 		try {
 			sdrTcpArguments = SdrTcpArguments.fromString(data.toString().replace("iqsrc://", ""));
+			if (intent.hasExtra(UsbManager.EXTRA_DEVICE)) {
+				usbDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+				Log.appendLine("USB device: " + usbDevice.toString());
+			} else {
+				usbDevice = null;
+			}
 		} catch (IllegalArgumentException e) {
 			finishWithError(e, err_info.unknown_error, SdrException.EXIT_WRONG_ARGS);
 		}
@@ -96,6 +107,14 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	@Override
 	protected void onStart() {
 		super.onStart();
+
+		if (usbDevice != null) {
+			Log.appendLine("onStart with USB device");
+			startServer(new RtlSdrDevice(usbDevice));
+			return;
+		}
+
+		Log.appendLine("onStart");
 
 		try {
 			List<SdrDevice> availableSdrDevices;
@@ -136,6 +155,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		super.onStop();
 		if (isBound) unbindService(mConnection);
 		
+		usbDevice = null;
 		sdrDevice = null;
 		sdrTcpArguments = null;
 	}
