@@ -22,12 +22,8 @@ package com.sdrtouch.rtlsdr;
 
 import android.app.Notification;
 import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.hardware.usb.UsbDevice;
-import android.hardware.usb.UsbManager;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -69,28 +65,11 @@ public class BinaryRunnerService extends Service {
 		return mBinder;
 	}
 
-
-    @Override
-    public void onCreate() {
-        super.onCreate();
-
-        // Register receiver
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        registerReceiver(broadcastReceiver, filter);
-    }
-
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		startWithDevice();
 		return START_NOT_STICKY;
 	}
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        unregisterReceiver(broadcastReceiver);
-    }
 
 	private void addWork(SdrDevice sdrDevice, SdrTcpArguments arguments) {
 		synchronized (workQueue) {
@@ -146,6 +125,10 @@ public class BinaryRunnerService extends Service {
 				Log.appendLine("Closed service due to exception " + e.getClass().getSimpleName() + ": " + e.getMessage());
 			}
 
+			Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
+			bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
+			sendBroadcast(bIntent);
+
 			stopForeground(true);
 			thisSdrDevice = null;
 
@@ -159,29 +142,6 @@ public class BinaryRunnerService extends Service {
 			startWithDevice();
 		}
 	};
-
-    private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            Log.appendLine(TAG + " onReceive: " + action);
-
-            if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                UsbDevice usbDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                Log.appendLine("USB detached: " + usbDevice.getDeviceName());
-                if (thisSdrDevice != null && thisSdrDevice.getName().equals(usbDevice.getDeviceName())) {
-                    Log.appendLine("USB close");
-
-                    Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
-                    // USB device
-                    bIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
-                    // SDR device
-                    bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
-                    sendBroadcast(bIntent);
-                }
-            }
-        }
-    };
 
 	@SuppressWarnings("deprecation")
 	private void ackquireWakeLock() {
