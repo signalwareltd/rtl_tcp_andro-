@@ -42,8 +42,14 @@ public class UsbDelegate extends Activity {
             Log.appendLine(TAG + " USB attached: " + usbDevice.getDeviceName());
             Intent newIntent = new Intent(BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED);
             newIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
-            startActivity(newIntent);
+            startActivityForResult(newIntent, 1234);
         }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Log.appendLine(TAG + " onActivityResult: requestCode=" + requestCode + " resultCode=" + resultCode);
+        if (requestCode != 1234) return; // This is the requestCode that was used with startActivityForResult
         finish();
     }
 }
