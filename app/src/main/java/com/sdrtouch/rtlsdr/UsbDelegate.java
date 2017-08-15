@@ -39,22 +39,17 @@ public class UsbDelegate extends Activity {
         Intent intent = getIntent();
 
         if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
-            UsbDevice usbDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+            UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
             Log.appendLine(TAG + " USB attached: " + usbDevice.getDeviceName());
             Intent newIntent = new Intent(BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED);
             newIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
             try {
-                startActivityForResult(newIntent, 1234);
+                startActivity(newIntent);
             } catch (ActivityNotFoundException e) {
                 Log.appendLine(TAG + " no activity found for SDR handling");
             }
         }
-    }
 
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        Log.appendLine(TAG + " onActivityResult: requestCode=" + requestCode + " resultCode=" + resultCode);
-        if (requestCode != 1234) return; // This is the requestCode that was used with startActivityForResult
         finish();
     }
 }
