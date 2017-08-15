@@ -44,6 +44,11 @@ import java.util.Set;
 import marto.rtl_tcp_andro.R;
 
 public class BinaryRunnerService extends Service {
+    public static final String ACTION_SDR_DEVICE_ATTACHED = "com.sdrtouch.rtlsdr.SDR_DEVICE_ATTACHED";
+    public static final String ACTION_SDR_DEVICE_DETACHED = "com.sdrtouch.rtlsdr.SDR_DEVICE_DETACHED";
+    public static final String EXTRA_DEVICE_NAME = "deviceName";
+    public static final String EXTRA_SUPPORTED_TCP_CMDS = "supportedTcpCommands";
+
 	private static final String TAG = "rtl_tcp_andro";
 	private final static int ONGOING_NOTIFICATION_ID = 438903919; // random id
 
@@ -54,25 +59,25 @@ public class BinaryRunnerService extends Service {
 	private SdrDevice thisSdrDevice = null;
 	private final Set<StatusCallback> statusCallbacks = new HashSet<>();
 	private final Queue<Pair<SdrDevice, SdrTcpArguments>> workQueue = new LinkedList<>();
-		
+
 	@Override
 	public IBinder onBind(Intent arg0) {
 		return mBinder;
 	}
-	
+
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		startWithDevice();
 		return START_NOT_STICKY;
 	}
-	
+
 	private void addWork(SdrDevice sdrDevice, SdrTcpArguments arguments) {
 		synchronized (workQueue) {
 			Log.appendLine("Queueing");
 			workQueue.add(new Pair<>(sdrDevice, arguments));
 		}
 	}
-	
+
 	private void startWithDevice() {
 		Pair<SdrDevice, SdrTcpArguments> pair;
 		synchronized (workQueue) {
@@ -86,9 +91,10 @@ public class BinaryRunnerService extends Service {
 			if (isRunning) Log.appendLine("Restarting");
 			thisSdrDevice = pair.first;
 			SdrTcpArguments sdrTcpArguments = pair.second;
-			Log.appendLine("Arguments "+ sdrTcpArguments);
-			
-			Check.isNotNull(thisSdrDevice); Check.isNotNull(sdrTcpArguments);
+			Log.appendLine("Arguments " + sdrTcpArguments);
+
+			Check.isNotNull(thisSdrDevice);
+			Check.isNotNull(sdrTcpArguments);
 			announceRunning(thisSdrDevice);
 			thisSdrDevice.addOnStatusListener(onStatusListener);
 			thisSdrDevice.openAsync(this, sdrTcpArguments);
@@ -103,22 +109,26 @@ public class BinaryRunnerService extends Service {
 
 		startForeground(ONGOING_NOTIFICATION_ID, notification);
 	}
-	
+
 	private final OnStatusListener onStatusListener = new OnStatusListener() {
 		@Override
 		public void onOpen(SdrDevice sdrDevice) {
 			Log.appendLine("The rtl-tcp implementation is running and is ready to accept clients");
 			ackquireWakeLock();
 		}
-		
+
 		@Override
 		public void onClosed(Throwable e) {
 			if (e == null) {
 				Log.appendLine("Successfully closed service");
 			} else {
-				Log.appendLine("Closed service due to exception "+e.getClass().getSimpleName()+": "+e.getMessage());
+				Log.appendLine("Closed service due to exception " + e.getClass().getSimpleName() + ": " + e.getMessage());
 			}
-			
+
+			Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
+			bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
+			sendBroadcast(bIntent);
+
 			stopForeground(true);
 			thisSdrDevice = null;
 
@@ -129,10 +139,10 @@ public class BinaryRunnerService extends Service {
 				}
 			} catch (Throwable ignored) {}
 
-            startWithDevice();
+			startWithDevice();
 		}
 	};
-	
+
 	@SuppressWarnings("deprecation")
 	private void ackquireWakeLock() {
 		try {
@@ -146,18 +156,18 @@ public class BinaryRunnerService extends Service {
 			Log.appendLine("Acquired wake lock. Will keep the screen on.");
 		} catch (Throwable e) {e.printStackTrace();}
 	}
-	
+
 	public void closeService() {
 		if (isRunning) {
 			Log.appendLine("Closing device");
 			thisSdrDevice.close();
 		}
 	}
-	
+
 	public boolean isRunning() {
 		return isRunning;
 	}
-	
+
 	private void announceRunning(SdrDevice sdrDevice) {
 		Log.appendLine("Starting service with device %s", sdrDevice.getName());
 		isRunning = true;
@@ -165,7 +175,7 @@ public class BinaryRunnerService extends Service {
 			for (StatusCallback callback : statusCallbacks) callback.onServerRunning();
 		}
 	}
-	
+
 	private void announceNotRunning() {
 		Log.appendLine("Closing service");
 		isRunning = false;
@@ -173,19 +183,20 @@ public class BinaryRunnerService extends Service {
 			for (StatusCallback callback : statusCallbacks) callback.onServerNotRunning();
 		}
 	}
-		
+
 	public class LocalBinder extends Binder {
 		public BinaryRunnerService getService() {
-            return BinaryRunnerService.this;
-        }
-		
+			return BinaryRunnerService.this;
+		}
+
 		public void registerCallback(StatusCallback callback) {
 			synchronized (statusCallbacks) {
 				statusCallbacks.add(callback);
-				if (isRunning) callback.onServerRunning(); else callback.onServerNotRunning();
+				if (isRunning) callback.onServerRunning();
+				else callback.onServerNotRunning();
 			}
 		}
-		
+
 		public void startWithDevice(SdrDevice sdrDevice, SdrTcpArguments sdrTcpArguments) {
 			Check.isNotNull(sdrDevice);
 			Check.isNotNull(sdrTcpArguments);
@@ -193,8 +204,8 @@ public class BinaryRunnerService extends Service {
 			if (!isRunning) startService(new Intent(getApplicationContext(), BinaryRunnerService.class));
 			else closeService();
 		}
-    }
-	
+	}
+
 	public interface StatusCallback {
 		void onServerRunning();
 		void onServerNotRunning();
