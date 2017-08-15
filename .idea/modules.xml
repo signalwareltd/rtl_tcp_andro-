@@ -4,11 +4,8 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/RtlSdr.iml" filepath="$PROJECT_DIR$/RtlSdr.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/libusb/libusb.iml" filepath="$PROJECT_DIR$/libusb/libusb.iml" />
       <module fileurl="file://$PROJECT_DIR$/libusb/libusb.iml" filepath="$PROJECT_DIR$/libusb/libusb.iml" />
       <module fileurl="file://$PROJECT_DIR$/rtl_tcp_andro-.iml" filepath="$PROJECT_DIR$/rtl_tcp_andro-.iml" />
-      <module fileurl="file://$PROJECT_DIR$/rtlsdr/rtlsdr.iml" filepath="$PROJECT_DIR$/rtlsdr/rtlsdr.iml" />
       <module fileurl="file://$PROJECT_DIR$/rtlsdr/rtlsdr.iml" filepath="$PROJECT_DIR$/rtlsdr/rtlsdr.iml" />
     </modules>
   </component>
