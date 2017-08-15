@@ -40,6 +40,10 @@ startActivityForResult(intent, 1234);
 * `supportedTcpCommands` contains a list of TCP commands that are supported. Information about them could be found in [tcp_commands.h](app/src/main/jni/tcp_commands.h). This value may not be set on old versions of the driver, so keep that in mind!
 * `errmsg` is an explanation of why the driver did not start in English. The reason is also passed as an integer in  `detailed_exception_code` for programmatic access. More information in [DeviceOpenActivity.java](app/src/main/java/com/sdrtouch/rtlsdr/DeviceOpenActivity.java).
 
+## Auto start
+
+The driver will emmit `com.sdrtouch.rtlsdr.SDR_DEVICE_ATTACHED` action when a compatible USB tuner has been connected to the Android device. You can use this intent to launch your application automatically.
+
 ## TCP client
 
 Once a *RESULT_OK* has been returned, you have to connect to the driver with a TCP client using the localhost and the port you have provided. Your client will start receiving IQ samples. By default each sample consists of two 8 bit unsigned bytes - one for the I and one for the Q part of the sample. Now you can use these samples for whatever reason you like!
