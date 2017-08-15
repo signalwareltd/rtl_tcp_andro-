@@ -21,6 +21,7 @@
 package com.sdrtouch.rtlsdr;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
@@ -42,7 +43,11 @@ public class UsbDelegate extends Activity {
             Log.appendLine(TAG + " USB attached: " + usbDevice.getDeviceName());
             Intent newIntent = new Intent(BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED);
             newIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
-            startActivityForResult(newIntent, 1234);
+            try {
+                startActivityForResult(newIntent, 1234);
+            } catch (ActivityNotFoundException e) {
+                Log.appendLine(TAG + " no activity found for SDR handling");
+            }
         }
     }
 
