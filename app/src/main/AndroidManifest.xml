@@ -31,7 +31,7 @@
 
     <uses-feature
         android:name="android.hardware.usb.host"
-        android:required="false" />
+        android:required="true" />
 
     <application
         android:fullBackupContent="true"
