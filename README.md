@@ -59,7 +59,7 @@ If you want to control the tuner, such as set the central frequency, you can sen
 * [Wavesink DAB/FM](https://play.google.com/store/apps/details?id=de.ses.wavesink)
 * [RF Analyzer](https://play.google.com/store/apps/details?id=com.mantz_it.rfanalyzer)
 * [welle.io](https://play.google.com/store/apps/details?id=io.welle.welle)
-* [ADSB Flight Tracker] (https://play.google.com/store/apps/details?id=com.enthusiasticcoder.adsbflightmonitor)
+* [ADSB Flight Tracker](https://play.google.com/store/apps/details?id=com.enthusiasticcoder.adsbflightmonitor)
 
 Open a github issue if you want your app to be featured here!
 
