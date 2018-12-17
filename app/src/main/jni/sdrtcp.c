@@ -132,23 +132,32 @@ static void serveClient(sdrtcp_t * obj) {
         while(bytesleft > 0 && obj->state == STAGE_CLIENT_SERVING) {
             FD_ZERO(&writefds);
             FD_SET(obj->client_socket, &writefds);
-            tv.tv_sec = 1;
+            tv.tv_sec = 5;
             tv.tv_usec = 0;
 
             int r = 0;
-            if (obj->state == STAGE_CLIENT_SERVING) r = select(obj->client_socket+1, NULL, &writefds, NULL, &tv);
+            if (obj->state == STAGE_CLIENT_SERVING) {
+                r = select(obj->client_socket + 1, NULL, &writefds, NULL, &tv);
+                if (r == -1) {
+                    int err = errno;
+                    char *str_error = strerror(errno);
+                    LOGI("SdrTcp: serveClient cannot select. Code %d, exception %s", err,
+                         str_error);
+                    obj->state = STAGE_NEEDS_STOPPING;
+                }
+                if (r && obj->state == STAGE_CLIENT_SERVING) {
+                    bytessent = send(obj->client_socket, data_to_send + index, bytesleft, 0);
+                    bytesleft -= bytessent;
+                    index += bytessent;
 
-            if(r && obj->state == STAGE_CLIENT_SERVING) {
-                bytessent = send(obj->client_socket,  data_to_send + index, bytesleft, 0);
-                bytesleft -= bytessent;
-                index += bytessent;
-            }
-
-            if(bytessent == -1 && obj->state == STAGE_CLIENT_SERVING) {
-                int err = errno;
-                char * str_error = strerror(errno);
-                LOGI("SdrTcp: serveClient cannot send to client. Code %d, exception %s", err, str_error);
-                obj->state = STAGE_NEEDS_STOPPING;
+                    if (bytessent == -1 && obj->state == STAGE_CLIENT_SERVING) {
+                        int err = errno;
+                        char *str_error = strerror(errno);
+                        LOGI("SdrTcp: serveClient cannot send to client. Code %d, exception %s",
+                             err, str_error);
+                        obj->state = STAGE_NEEDS_STOPPING;
+                    }
+                }
             }
         }
 
