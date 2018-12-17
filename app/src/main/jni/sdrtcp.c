@@ -145,7 +145,9 @@ static void serveClient(sdrtcp_t * obj) {
             }
 
             if(bytessent == -1 && obj->state == STAGE_CLIENT_SERVING) {
-                LOGI("SdrTcp: serveClient cannot send to client");
+                int err = errno;
+                char * str_error = strerror(errno);
+                LOGI("SdrTcp: serveClient cannot send to client. Code %d, exception %s", err, str_error);
                 obj->state = STAGE_NEEDS_STOPPING;
             }
         }
