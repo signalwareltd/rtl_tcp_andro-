@@ -68,7 +68,7 @@ public class BinaryRunnerService extends Service {
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		startWithDevice();
-		return START_NOT_STICKY;
+		return START_STICKY;
 	}
 
 	private void addWork(SdrDevice sdrDevice, SdrTcpArguments arguments) {
