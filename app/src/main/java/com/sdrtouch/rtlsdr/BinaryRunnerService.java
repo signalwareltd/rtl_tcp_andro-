@@ -21,13 +21,16 @@
 package com.sdrtouch.rtlsdr;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.support.v7.app.NotificationCompat;
+import android.support.v4.app.NotificationCompat;
 import android.util.Pair;
 
 import com.sdrtouch.core.SdrTcpArguments;
@@ -103,11 +106,30 @@ public class BinaryRunnerService extends Service {
 	}
 
 	private void startForeground() {
-		Notification notification = new NotificationCompat.Builder(this)
-				.setContentTitle(getText(R.string.app_name))
-				.build();
+        NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        String NOTIFICATION_CHANNEL_ID = "rtl_sdr";
 
-		startForeground(ONGOING_NOTIFICATION_ID, notification);
+        if (notificationManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel notificationChannel = new NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID, "Device driver notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+
+            // Configure the notification channel.
+            notificationChannel.setDescription("When rtl-sdr operates");
+            notificationChannel.enableVibration(false);
+            notificationManager.createNotificationChannel(notificationChannel);
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+                .setContentTitle(getText(R.string.app_name));
+
+		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN) {
+            builder = builder
+                    .setPriority(Notification.PRIORITY_MAX);
+		}
+
+		startForeground(ONGOING_NOTIFICATION_ID, builder.build());
 	}
 
 	private final OnStatusListener onStatusListener = new OnStatusListener() {

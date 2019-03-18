@@ -27,6 +27,7 @@ import android.content.ServiceConnection;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.v4.app.DialogFragment;
@@ -184,7 +185,10 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 			this.sdrDevice = sdrDevice;
 			sdrDevice.addOnStatusListener(onDeviceStatusListener);
 			Intent serviceIntent = new Intent(this, BinaryRunnerService.class);
-			bindService(serviceIntent, mConnection, Context.BIND_AUTO_CREATE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            }
+            bindService(serviceIntent, mConnection, Context.BIND_AUTO_CREATE);
 		} catch (Exception e) {
 			finishWithError(e);
 		}

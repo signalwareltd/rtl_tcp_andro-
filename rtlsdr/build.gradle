@@ -22,7 +22,7 @@ apply plugin: "com.android.model.native"
 
 model {
     android {
-        compileSdkVersion 25
+        compileSdkVersion 28
         ndk {
             ldLibs.addAll(["log"])
             moduleName "rtlsdr"
