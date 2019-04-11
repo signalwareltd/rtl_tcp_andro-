@@ -40,6 +40,7 @@ model {
     }
 
     android.ndk {
+        platformVersion = "14"
         moduleName = "rtlSdrAndroid"
         ldLibs.addAll(["log"])
         CFlags.add("-Wall")

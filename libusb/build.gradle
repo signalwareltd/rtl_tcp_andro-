@@ -24,6 +24,7 @@ model {
     android {
         compileSdkVersion 28
         ndk {
+            platformVersion = "14"
             moduleName "libusb"
             ldLibs.addAll(["log"])
             CFlags.add("-Wall")
