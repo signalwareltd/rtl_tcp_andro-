@@ -1,1 +1,1 @@
-include ':app', ':libusb', ':rtlsdr'
+include ':app', ':libusb', ':rtlsdr', ':hackrf'

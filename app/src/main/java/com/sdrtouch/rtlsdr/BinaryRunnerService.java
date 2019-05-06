@@ -173,7 +173,7 @@ public class BinaryRunnerService extends Service {
 					Context.POWER_SERVICE)).newWakeLock(
 							PowerManager.SCREEN_BRIGHT_WAKE_LOCK
 							| PowerManager.ON_AFTER_RELEASE,
-							TAG);
+							TAG+":sdr_driver_lock");
 			wl.acquire();
 			Log.appendLine("Acquired wake lock. Will keep the screen on.");
 		} catch (Throwable e) {e.printStackTrace();}

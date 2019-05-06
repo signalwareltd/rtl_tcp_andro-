@@ -1,6 +1,6 @@
 # Usage
 
-This driver implements an extension of the rtl-tcp protocol. It is fully compatible with any rtl-tcp capable client. However it also adds a number of additional commands that can allow Android clients to use the same API to control other SDR hardware devices such as the SDRplay.
+This driver implements an extension of the rtl-tcp protocol. It is fully compatible with any rtl-tcp capable client. However it also adds a number of additional commands that can allow Android clients to use the same API to control other SDR hardware devices such as the SDRplay or HackRF.
 
 Here are the steps you need to take when building your app so you can start receiving I/Q samples and control the tuner.
 
@@ -15,7 +15,7 @@ Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://-a 127
 startActivityForResult(intent, 1234);
 ```
 
-*Note:* It is possible that the user doesn't have the driver installed and this invocation can throw a [ActivityNotFound](https://developer.android.com/reference/android/content/ActivityNotFoundException.html) exception. In such a case you should ask the user to consider installing the RTL-SDR driver from https://play.google.com/store/apps/details?id=marto.rtl_tcp_andro or http://www.amazon.com/gp/mas/dl/android?p=marto.rtl_tcp_andro .
+*Note:* It is possible that the user doesn't have the driver installed and this invocation can throw a [ActivityNotFound](https://developer.android.com/reference/android/content/ActivityNotFoundException.html) exception. In such a case you should ask the user to consider installing the RTL-SDR + HackRF driver from https://play.google.com/store/apps/details?id=marto.rtl_tcp_andro or http://www.amazon.com/gp/mas/dl/android?p=marto.rtl_tcp_andro .
 
 *Advanced note:* There might be multiple sdr drivers installed on the device that can handle this protocol (ex. if the user has the SDRplay driver at the same time). This will mean the user will be asked to chose which driver to use. If they click the "always use this app" option in the chooser, they will be stuck with only one of the drivers being called for the *iqsrc* intent, leaving the other driver idle forever. To avoid this poor user experience, your app should use [PackageManager::queryIntentActivities](https%3A%2F%2Fdeveloper.android.com%2Freference%2Fandroid%2Fcontent%2Fpm%2FPackageManager.html%23queryIntentActivities(android.content.Intent%2C%20int)) to enumerate installed apps that support *iqsrc*. Your app can then go trough the list and ask each of them to open a device until it finds one that returns *RESULT_OK*.
 
@@ -90,3 +90,9 @@ http://www.libusb.org/wiki/libusb-1.0
 
 Based on modifications on libusb:
 https://github.com/kuldeepdhaka/libusb
+
+Hack RF support is based on Dennis Mantz's HackRF for Android:
+https://github.com/demantz/hackrf_android
+
+Hack RF library for Android is based on:
+https://github.com/mossmann/hackrf/tree/master/host/libhackrf

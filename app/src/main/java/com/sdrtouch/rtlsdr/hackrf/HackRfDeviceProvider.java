@@ -18,7 +18,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package com.sdrtouch.rtlsdr.driver;
+package com.sdrtouch.rtlsdr.hackrf;
 
 import android.content.Context;
 import android.hardware.usb.UsbDevice;
@@ -28,23 +28,27 @@ import com.sdrtouch.core.devices.SdrDeviceProvider;
 import com.sdrtouch.rtlsdr.RtlSdrApplication;
 import com.sdrtouch.tools.UsbPermissionHelper;
 
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
 import marto.rtl_tcp_andro.R;
 
-public class RtlSdrDeviceProvider implements SdrDeviceProvider {
+public class HackRfDeviceProvider implements SdrDeviceProvider {
     @Override
     public List<SdrDevice> listDevices(Context ctx, boolean forceRoot) {
-        Set<UsbDevice> availableUsbDevices = UsbPermissionHelper.getAvailableUsbDevices(RtlSdrApplication.getAppContext(), R.xml.rtl_sdr_device_filter);
-        List<SdrDevice> devices = new LinkedList<>();
-        for (UsbDevice usbDevice : availableUsbDevices) devices.add(new RtlSdrDevice(usbDevice));
-        return devices;
+        Set<UsbDevice> availableUsbDevices = UsbPermissionHelper.getAvailableUsbDevices(RtlSdrApplication.getAppContext(), R.xml.hackrf_device_filter);
+        if (!availableUsbDevices.isEmpty()) {
+            // Hack RF library can't choose between multiple HackRFs plugged in at the same time
+            // so it's essentially a singleton
+            UsbDevice device = availableUsbDevices.iterator().next();
+            return Collections.<SdrDevice>singletonList(new HackRfSdrDevice(device));
+        }
+        return Collections.emptyList();
     }
 
     @Override
     public String getName() {
-        return "RtlSdr";
+        return "HackRF";
     }
 }

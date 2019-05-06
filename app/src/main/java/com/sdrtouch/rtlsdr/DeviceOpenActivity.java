@@ -43,6 +43,7 @@ import com.sdrtouch.core.exceptions.SdrException.err_info;
 import com.sdrtouch.rtlsdr.BinaryRunnerService.LocalBinder;
 import com.sdrtouch.rtlsdr.driver.RtlSdrDevice;
 import com.sdrtouch.rtlsdr.driver.RtlSdrDeviceProvider;
+import com.sdrtouch.rtlsdr.hackrf.HackRfDeviceProvider;
 import com.sdrtouch.tools.DeviceDialog;
 import com.sdrtouch.tools.ExceptionTools;
 import com.sdrtouch.tools.Log;
@@ -54,7 +55,10 @@ import marto.rtl_tcp_andro.R;
 
 public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog.OnDeviceDialog {
 	
-	private final static SdrDeviceProvider[] SDR_DEVICE_PROVIDERS = new SdrDeviceProvider[] { new RtlSdrDeviceProvider() };
+	private final static SdrDeviceProvider[] SDR_DEVICE_PROVIDERS = new SdrDeviceProvider[] {
+			new RtlSdrDeviceProvider(),
+			new HackRfDeviceProvider(),
+	};
 
 	private SdrTcpArguments sdrTcpArguments;
 	private SdrDevice sdrDevice;
