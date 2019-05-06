@@ -23,7 +23,7 @@
           xmlns:tools="http://schemas.android.com/tools"
           package="marto.rtl_tcp_andro"
           android:installLocation="internalOnly"
-          android:versionCode="24"
+          android:versionCode="25"
           android:versionName="3.10" >
 
     <uses-permission android:name="android.permission.INTERNET" />

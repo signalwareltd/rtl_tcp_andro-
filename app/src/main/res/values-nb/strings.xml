@@ -33,6 +33,8 @@
 		<h2>Inkludert åpen-kildet programvare</h2>
 		<p>En modifisert versjon av librtlsdr <a href="http://sdr.osmocom.org/trac/wiki/rtl-sdr">sdr.osmocom.org/trac/wiki/rtl-sdr</a></p>
 		<p>En modifisert versjon av libusb <a href="http://libusb.info/">libusb.info</a></p>
+		<p>En modifisert versjon av hackrf_android <a href="https://github.com/demantz/hackrf_android">github.com/demantz/hackrf_android</a></p>
+		<p>En modifisert versjon av libhackrf <a href="https://github.com/mossmann/hackrf/tree/master/host/libhackrf">github.com/mossmann/libhackrf</a></p>
 	]]></string>
 	
 	<string name="warn_txt">Driveren har blitt vellykket installert! Vennligst start opp din vertsapp og den vil sette i gang driveren automatisk.</string>
