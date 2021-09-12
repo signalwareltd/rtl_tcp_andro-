@@ -447,10 +447,15 @@ static int r82xx_set_pll(struct r82xx_priv *priv, uint32_t freq)
 	if (rc < 0)
 		return rc;
 
-	/* set VCO current = 100 */
-	rc = r82xx_write_reg_mask(priv, 0x12, 0x80, 0xe0);
+	/* set VCO current = 100 RTL-SDRBLOG MOD: MAX CURRENT*/
+	rc = r82xx_write_reg_mask(priv, 0x12, 0x06, 0xff);
 	if (rc < 0)
 		return rc;
+
+	// Test turning tracking filter off
+	//rc = r82xx_write_reg_mask(priv, 0x1a, 0x40, 0xC0);
+
+
 
 	/* Calculate divider */
 	while (mix_div <= 64) {
@@ -540,7 +545,7 @@ static int r82xx_set_pll(struct r82xx_priv *priv, uint32_t freq)
 
 		if (!i) {
 			/* Didn't lock. Increase VCO current */
-			rc = r82xx_write_reg_mask(priv, 0x12, 0x60, 0xe0);
+			rc = r82xx_write_reg_mask(priv, 0x12, 0x06, 0xff);
 			if (rc < 0)
 				return rc;
 		}
@@ -663,6 +668,9 @@ static int r82xx_sysfreq_sel(struct r82xx_priv *priv, uint32_t freq,
 	rc = r82xx_write_reg_mask(priv, 0x11, cp_cur, 0x38);
 	if (rc < 0)
 		return rc;
+	
+	// RTLSDRBLOG. Improve L-band performance by setting PLL drop out to 2.0v
+        div_buf_cur = 0xa0;
 	rc = r82xx_write_reg_mask(priv, 0x17, div_buf_cur, 0x30);
 	if (rc < 0)
 		return rc;
@@ -770,78 +778,18 @@ static int r82xx_set_tv_standard(struct r82xx_priv *priv,
 	uint8_t lt_att, flt_ext_widest, polyfil_cur;
 	int need_calibration;
 
-	if (delsys == SYS_ISDBT) {
-		if_khz = 4063;
-		filt_cal_lo = 59000;
-		filt_gain = 0x10;	/* +3db, 6mhz on */
-		img_r = 0x00;		/* image negative */
-		filt_q = 0x10;		/* r10[4]:low q(1'b1) */
-		hp_cor = 0x6a;		/* 1.7m disable, +2cap, 1.25mhz */
-		ext_enable = 0x40;	/* r30[6], ext enable; r30[5]:0 ext at lna max */
-		loop_through = 0x00;	/* r5[7], lt on */
-		lt_att = 0x00;		/* r31[7], lt att enable */
-		flt_ext_widest = 0x00;	/* r15[7]: flt_ext_wide off */
-		polyfil_cur = 0x60;	/* r25[6:5]:min */
-	} else {
-		if (bw <= 6) {
-			if_khz = 3570;
-			filt_cal_lo = 56000;	/* 52000->56000 */
-			filt_gain = 0x10;	/* +3db, 6mhz on */
-			img_r = 0x00;		/* image negative */
-			filt_q = 0x10;		/* r10[4]:low q(1'b1) */
-			hp_cor = 0x6b;		/* 1.7m disable, +2cap, 1.0mhz */
-			ext_enable = 0x60;	/* r30[6]=1 ext enable; r30[5]:1 ext at lna max-1 */
-			loop_through = 0x00;	/* r5[7], lt on */
-			lt_att = 0x00;		/* r31[7], lt att enable */
-			flt_ext_widest = 0x00;	/* r15[7]: flt_ext_wide off */
-			polyfil_cur = 0x60;	/* r25[6:5]:min */
-		} else if (bw == 7) {
-#if 0
-			/*
-			 * There are two 7 MHz tables defined on the original
-			 * driver, but just the second one seems to be visible
-			 * by rtl2832. Keep this one here commented, as it
-			 * might be needed in the future
-			 */
-
-			if_khz = 4070;
-			filt_cal_lo = 60000;
-			filt_gain = 0x10;	/* +3db, 6mhz on */
-			img_r = 0x00;		/* image negative */
-			filt_q = 0x10;		/* r10[4]:low q(1'b1) */
-			hp_cor = 0x2b;		/* 1.7m disable, +1cap, 1.0mhz */
-			ext_enable = 0x60;	/* r30[6]=1 ext enable; r30[5]:1 ext at lna max-1 */
-			loop_through = 0x00;	/* r5[7], lt on */
-			lt_att = 0x00;		/* r31[7], lt att enable */
-			flt_ext_widest = 0x00;	/* r15[7]: flt_ext_wide off */
-			polyfil_cur = 0x60;	/* r25[6:5]:min */
-#endif
-			/* 7 MHz, second table */
-			if_khz = 4570;
-			filt_cal_lo = 63000;
-			filt_gain = 0x10;	/* +3db, 6mhz on */
-			img_r = 0x00;		/* image negative */
-			filt_q = 0x10;		/* r10[4]:low q(1'b1) */
-			hp_cor = 0x2a;		/* 1.7m disable, +1cap, 1.25mhz */
-			ext_enable = 0x60;	/* r30[6]=1 ext enable; r30[5]:1 ext at lna max-1 */
-			loop_through = 0x00;	/* r5[7], lt on */
-			lt_att = 0x00;		/* r31[7], lt att enable */
-			flt_ext_widest = 0x00;	/* r15[7]: flt_ext_wide off */
-			polyfil_cur = 0x60;	/* r25[6:5]:min */
-		} else {
-			if_khz = 4570;
-			filt_cal_lo = 68500;
-			filt_gain = 0x10;	/* +3db, 6mhz on */
-			img_r = 0x00;		/* image negative */
-			filt_q = 0x10;		/* r10[4]:low q(1'b1) */
-			hp_cor = 0x0b;		/* 1.7m disable, +0cap, 1.0mhz */
-			ext_enable = 0x60;	/* r30[6]=1 ext enable; r30[5]:1 ext at lna max-1 */
-			loop_through = 0x00;	/* r5[7], lt on */
-			lt_att = 0x00;		/* r31[7], lt att enable */
-			flt_ext_widest = 0x00;	/* r15[7]: flt_ext_wide off */
-			polyfil_cur = 0x60;	/* r25[6:5]:min */
-		}
-	}
+	/* BW < 6 MHz */
+	if_khz = 3570;
+	filt_cal_lo = 56000;	/* 52000->56000 */
+	filt_gain = 0x10;	/* +3db, 6mhz on */
+	img_r = 0x00;		/* image negative */
+	filt_q = 0x10;		/* r10[4]:low q(1'b1) */
+	hp_cor = 0x6b;		/* 1.7m disable, +2cap, 1.0mhz */
+	ext_enable = 0x60;	/* r30[6]=1 ext enable; r30[5]:1 ext at lna max-1 */
+	loop_through = 0x01;	/* r5[7], lt off */
+	lt_att = 0x00;		/* r31[7], lt att enable */
+	flt_ext_widest = 0x00;	/* r15[7]: flt_ext_wide off */
+	polyfil_cur = 0x60;	/* r25[6:5]:min */
 
 	/* Initialize the shadow registers */
 	memcpy(priv->regs, r82xx_init_array, sizeof(r82xx_init_array));
@@ -1028,7 +976,7 @@ int r82xx_set_gain(struct r82xx_priv *priv, int set_manual_gain, int gain)
 			return rc;
 
 		/* set fixed VGA gain for now (16.3 dB) */
-		rc = r82xx_write_reg_mask(priv, 0x0c, 0x08, 0x9f);
+		rc = r82xx_write_reg_mask(priv, 0x0c, 0x08, 0x9f); //init val 0x08 0x0c works well at 1.7
 		if (rc < 0)
 			return rc;
 
@@ -1196,7 +1144,7 @@ int r82xx_standby(struct r82xx_priv *priv)
 	rc = r82xx_write_reg(priv, 0x06, 0xb1);
 	if (rc < 0)
 		return rc;
-	rc = r82xx_write_reg(priv, 0x05, 0x03);
+	rc = r82xx_write_reg(priv, 0x05, 0xa0);
 	if (rc < 0)
 		return rc;
 	rc = r82xx_write_reg(priv, 0x07, 0x3a);

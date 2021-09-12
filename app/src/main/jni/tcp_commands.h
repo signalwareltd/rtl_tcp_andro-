@@ -42,6 +42,7 @@ typedef enum
     TCP_SET_RTL_XTAL = 0x0b, // rtlsdr_set_xtal_freq with rtl_freq set as the parameter
     TCP_SET_TUNER_XTAL = 0x0c, // rtlsdr_set_xtal_freq with tuner_freq set as the parameter
     TCP_SET_TUNER_GAIN_BY_ID = 0x0d, // set_gain_by_index
+    TCP_SET_BIAS_TEE = 0x0e, // rtlsdr_set_bias_tee
 
     // Android only rtl-tcp API
     TCP_ANDROID_EXIT = 0x7e, // send any value to cause the driver to turn off itself

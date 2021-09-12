@@ -98,6 +98,7 @@ static jint SUPPORTED_COMMANDS[] = {
         TCP_SET_RTL_XTAL,
         TCP_SET_TUNER_XTAL,
         TCP_SET_TUNER_GAIN_BY_ID,
+        TCP_SET_BIAS_TEE,
         TCP_ANDROID_EXIT,
         TCP_ANDROID_GAIN_BY_PERCENTAGE
 };
@@ -156,6 +157,10 @@ void tcpCommandCallback(sdrtcp_t * tcpserv, void * pointer, sdr_tcp_command_t * 
         case TCP_SET_TUNER_GAIN_BY_ID:
             LOGI("set tuner gain by index %d", cmd->parameter);
             set_gain_by_index(dev->rtl_dev, cmd->parameter);
+            break;
+        case TCP_SET_BIAS_TEE:
+            LOGI("set bias tee %d", cmd->parameter);
+            set_bias_tee(dev->rtl_dev, cmd->parameter);
             break;
         case TCP_ANDROID_EXIT:
             LOGI("tcpCommandCallback: client requested to close rtl_tcp_andro");

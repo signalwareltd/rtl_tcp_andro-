@@ -103,6 +103,7 @@ struct rtlsdr_dev {
 	void *cb_ctx;
 	enum rtlsdr_async_status async_status;
 	int async_cancel;
+	int use_zerocopy;
 	/* rtl demod context */
 	uint32_t rate; /* Hz */
 	uint32_t rtl_xtal; /* Hz */
@@ -124,6 +125,8 @@ struct rtlsdr_dev {
 	int dev_lost;
 	int driver_active;
 	unsigned int xfer_errors;
+	int force_bt;
+	int force_ds;
 };
 
 void rtlsdr_set_gpio_bit(rtlsdr_dev_t *dev, uint8_t gpio, int val);
@@ -329,6 +332,7 @@ static rtlsdr_dongle_t known_devices[] = {
 	{ 0x0ccd, 0x00e0, "Terratec NOXON DAB/DAB+ USB dongle (rev 2)" },
 	{ 0x1554, 0x5020, "PixelView PV-DT235U(RN)" },
 	{ 0x15f4, 0x0131, "Astrometa DVB-T/DVB-T2" },
+	{ 0x15f4, 0x0133, "HanfTek DAB+FM+DVB-T" },
 	{ 0x185b, 0x0620, "Compro Videomate U620F"},
 	{ 0x185b, 0x0650, "Compro Videomate U650F"},
 	{ 0x185b, 0x0680, "Compro Videomate U680F"},
@@ -366,6 +370,7 @@ static rtlsdr_dongle_t known_devices[] = {
 #define BULK_TIMEOUT	0
 
 #define EEPROM_ADDR	0xa0
+#define EEPROM_SIZE     256
 
 enum usb_reg {
 	USB_SYSCTL		= 0x2000,
@@ -569,7 +574,7 @@ void rtlsdr_set_gpio_output(rtlsdr_dev_t *dev, uint8_t gpio)
 	gpio = 1 << gpio;
 
 	r = rtlsdr_read_reg(dev, SYSB, GPD, 1);
-	rtlsdr_write_reg(dev, SYSB, GPO, r & ~gpio, 1);
+	rtlsdr_write_reg(dev, SYSB, GPD, r & ~gpio, 1);
 	r = rtlsdr_read_reg(dev, SYSB, GPOE, 1);
 	rtlsdr_write_reg(dev, SYSB, GPOE, r | gpio, 1);
 }
@@ -1171,6 +1176,8 @@ int rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on)
 	if (!dev)
 		return -1;
 
+	if(dev->force_ds) on = 2;
+
 	if (on) {
 		if (dev->tuner && dev->tuner->exit) {
 			rtlsdr_set_i2c_repeater(dev, 1);
@@ -1242,6 +1249,10 @@ int rtlsdr_set_offset_tuning(rtlsdr_dev_t *dev, int on)
 
 	if (!dev)
 		return -1;
+
+	// RTL-SDR-BLOG Hack, enables us to turn on the bias tee by clicking on "offset tuning" in software that doesn't have specified bias tee support.
+	// Offset tuning is not used for R820T devices so it is no problem.
+	rtlsdr_set_gpio(dev, 0, on);
 
 	if ((dev->tuner_type == RTLSDR_TUNER_R820T) ||
 	    (dev->tuner_type == RTLSDR_TUNER_R828D))
@@ -1445,6 +1456,7 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 	struct libusb_device_descriptor dd;
 	uint8_t reg;
 	ssize_t cnt;
+	uint8_t buf[EEPROM_SIZE];
 
 	dev = malloc(sizeof(rtlsdr_dev_t));
 	if (NULL == dev)
@@ -1564,11 +1576,11 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 	}
 
 	/* initialise GPIOs */
-	rtlsdr_set_gpio_output(dev, 5);
+	rtlsdr_set_gpio_output(dev, 4);
 
 	/* reset tuner before probing */
-	rtlsdr_set_gpio_bit(dev, 5, 1);
-	rtlsdr_set_gpio_bit(dev, 5, 0);
+	rtlsdr_set_gpio_bit(dev, 4, 1);
+	rtlsdr_set_gpio_bit(dev, 4, 0);
 
 	reg = rtlsdr_i2c_read_reg(dev, FC2580_I2C_ADDR, FC2580_CHECK_ADDR);
 	if ((reg & 0x7f) == FC2580_CHECK_VAL) {
@@ -1593,6 +1605,7 @@ found:
 	switch (dev->tuner_type) {
 	case RTLSDR_TUNER_R828D:
 		dev->tun_xtal = R828D_XTAL_FREQ;
+		/* fall-through */
 	case RTLSDR_TUNER_R820T:
 		/* disable Zero-IF mode */
 		rtlsdr_demod_write_reg(dev, 1, 0xb1, 0x1a, 1);
@@ -1606,14 +1619,25 @@ found:
 
 		/* enable spectrum inversion */
 		rtlsdr_demod_write_reg(dev, 1, 0x15, 0x01, 1);
+
 		break;
 	case RTLSDR_TUNER_UNKNOWN:
 		fprintf(stderr, "No supported tuner found\n");
-		rtlsdr_set_direct_sampling(dev, 1);
+		rtlsdr_set_direct_sampling(dev, 2);
 		break;
 	default:
 		break;
 	}
+
+
+    /* Hack to force the Bias T to always be on if we set the IR-Endpoint bit in the EEPROM to 0. Default on EEPROM is 1. */
+	r = rtlsdr_read_eeprom(dev, buf, 0, EEPROM_SIZE);
+    dev->force_bt = (buf[7] & 0x02) ? 0 : 1;
+	if(dev->force_bt) rtlsdr_set_gpio(dev, 0, 1);
+	/* Hack to force direct sampling mode to always be on if we set the remote-enabled bit in the EEPROM to 1. Default on EEPROM is 0. */
+	dev->force_ds = (buf[7] & 0x01) ? 1 : 0;
+	if(dev->force_ds) dev->tuner_type = RTLSDR_TUNER_UNKNOWN;
+
 
 	if (dev->tuner->init)
 		r = dev->tuner->init(dev);
@@ -1625,6 +1649,9 @@ found:
 	return 0;
 err:
 	if (dev) {
+		if (dev->devh)
+			libusb_close(dev->devh);
+
 		if (dev->ctx)
 			libusb_exit(dev->ctx);
 
@@ -1739,12 +1766,64 @@ static int _rtlsdr_alloc_async_buffers(rtlsdr_dev_t *dev)
 			dev->xfer[i] = libusb_alloc_transfer(0);
 	}
 
-	if (!dev->xfer_buf) {
-		dev->xfer_buf = malloc(dev->xfer_buf_num *
-					   sizeof(unsigned char *));
+	if (dev->xfer_buf)
+		return -2;
 
-		for(i = 0; i < dev->xfer_buf_num; ++i)
+	dev->xfer_buf = malloc(dev->xfer_buf_num * sizeof(unsigned char *));
+	memset(dev->xfer_buf, 0, dev->xfer_buf_num * sizeof(unsigned char *));
+
+#if defined(ENABLE_ZEROCOPY) && defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
+	fprintf(stderr, "Allocating %d zero-copy buffers\n", dev->xfer_buf_num);
+
+	dev->use_zerocopy = 1;
+	for (i = 0; i < dev->xfer_buf_num; ++i) {
+		dev->xfer_buf[i] = libusb_dev_mem_alloc(dev->devh, dev->xfer_buf_len);
+
+		if (dev->xfer_buf[i]) {
+			/* Check if Kernel usbfs mmap() bug is present: if the
+			 * mapping is correct, the buffers point to memory that
+			 * was memset to 0 by the Kernel, otherwise, they point
+			 * to random memory. We check if the buffers are zeroed
+			 * and otherwise fall back to buffers in userspace.
+			 */
+			if (dev->xfer_buf[i][0] || memcmp(dev->xfer_buf[i],
+							  dev->xfer_buf[i] + 1,
+							  dev->xfer_buf_len - 1)) {
+				fprintf(stderr, "Detected Kernel usbfs mmap() "
+						"bug, falling back to buffers "
+						"in userspace\n");
+				dev->use_zerocopy = 0;
+				break;
+			}
+		} else {
+			fprintf(stderr, "Failed to allocate zero-copy "
+					"buffer for transfer %d\nFalling "
+					"back to buffers in userspace\n", i);
+			dev->use_zerocopy = 0;
+			break;
+		}
+	}
+
+	/* zero-copy buffer allocation failed (partially or completely)
+	 * we need to free the buffers again if already allocated */
+	if (!dev->use_zerocopy) {
+		for (i = 0; i < dev->xfer_buf_num; ++i) {
+			if (dev->xfer_buf[i])
+				libusb_dev_mem_free(dev->devh,
+						    dev->xfer_buf[i],
+						    dev->xfer_buf_len);
+		}
+	}
+#endif
+
+	/* no zero-copy available, allocate buffers in userspace */
+	if (!dev->use_zerocopy) {
+		for (i = 0; i < dev->xfer_buf_num; ++i) {
 			dev->xfer_buf[i] = malloc(dev->xfer_buf_len);
+
+			if (!dev->xfer_buf[i])
+				return -ENOMEM;
+		}
 	}
 
 	return 0;
@@ -1769,9 +1848,18 @@ static int _rtlsdr_free_async_buffers(rtlsdr_dev_t *dev)
 	}
 
 	if (dev->xfer_buf) {
-		for(i = 0; i < dev->xfer_buf_num; ++i) {
-			if (dev->xfer_buf[i])
-				free(dev->xfer_buf[i]);
+		for (i = 0; i < dev->xfer_buf_num; ++i) {
+			if (dev->xfer_buf[i]) {
+				if (dev->use_zerocopy) {
+#if defined (__linux__) && LIBUSB_API_VERSION >= 0x01000105
+					libusb_dev_mem_free(dev->devh,
+							    dev->xfer_buf[i],
+							    dev->xfer_buf_len);
+#endif
+				} else {
+					free(dev->xfer_buf[i]);
+				}
+			}
 		}
 
 		free(dev->xfer_buf);
@@ -1826,7 +1914,12 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 
 		r = libusb_submit_transfer(dev->xfer[i]);
 		if (r < 0) {
-			fprintf(stderr, "Failed to submit transfer %i!\n", i);
+			fprintf(stderr, "Failed to submit transfer %i\n"
+					"Please increase your allowed " 
+					"usbfs buffer size with the "
+					"following command:\n"
+					"echo 0 > /sys/module/usbcore"
+					"/parameters/usbfs_memory_mb\n", i);
 			dev->async_status = RTLSDR_CANCELING;
 			break;
 		}
@@ -1935,4 +2028,30 @@ int rtlsdr_i2c_read_fn(void *dev, uint8_t addr, uint8_t *buf, int len)
 		return rtlsdr_i2c_read(((rtlsdr_dev_t *)dev), addr, buf, len);
 
 	return -1;
+}
+
+int rtlsdr_set_bias_tee(rtlsdr_dev_t *dev, int on)
+{
+	if (!dev)
+		return -1;
+
+	if(dev->force_bt) on = 1; // If force_bt is on from the EEPROM, do not allow bias tee to turn off
+
+	rtlsdr_set_gpio_output(dev, 0);
+	rtlsdr_set_gpio_bit(dev, 0, on);
+
+	return 0;
+}
+
+int rtlsdr_set_gpio(rtlsdr_dev_t *dev, int gpio_pin, int on)
+{
+	if (!dev)
+		return -1;
+
+	if(dev->force_bt) on = 1; // If force_bt is on from the EEPROM, do not allow bias tee to turn off
+
+	rtlsdr_set_gpio_output(dev, gpio_pin);
+	rtlsdr_set_gpio_bit(dev, gpio_pin, on);
+
+	return 1;
 }
