@@ -160,7 +160,7 @@ void tcpCommandCallback(sdrtcp_t * tcpserv, void * pointer, sdr_tcp_command_t * 
             break;
         case TCP_SET_BIAS_TEE:
             LOGI("set bias tee %d", cmd->parameter);
-            set_bias_tee(dev->rtl_dev, cmd->parameter);
+            rtlsdr_set_bias_tee(dev->rtl_dev, cmd->parameter);
             break;
         case TCP_ANDROID_EXIT:
             LOGI("tcpCommandCallback: client requested to close rtl_tcp_andro");
