@@ -1,0 +1,19 @@
+
+<resources>
+    <string name="platform_not_supported">Din Android-plattform er ikke støttet. Vennligst ta kontakt med oss for å fortelle oss mer om enheten din, sånn at vi kan støtte den i fremtiden.</string>
+
+    <string name="exception_LIBUSB_GENERIC">libusb-unntak %s</string>
+    <string name="exception_LIBUSB_ERROR_ACCESS">Får ikke tilgang til enheten</string>
+    <string name="exception_DEFAULT">Unntaks-ID %d</string>
+    <string name="exception_OK">Ingen unntak :)</string>
+    <string name="exception_WRONG_ARGS">Ukorrekte argumenter ble meldt inn! Vennligst sjekk sdr_tcp-bruksanvisningen!</string>
+    <string name="exception_INVALID_FD">En ugyldig USB-filbeskriver ble videreformidlet gjennom Java.</string>
+    <string name="exception_NO_DEVICES">Ingen støttede enheter ble funnet (Sørg for at din USB-enhet er koblet til, at den får ordentlig med strøm, og at din mobil/nettbrett støtter USB-vertsmodus.)</string>
+    <string name="exception_FAILED_TO_OPEN_DEVICE">Enheten ble funnet, men kan ikke bli åpnet. Dette kan tyde på at din mobil/nettbrett ikke støtter USB OTG.</string>
+    <string name="exception_CANNOT_RESTART">Intern feil: Kan ikke starte tjenesten på nytt</string>
+    <string name="exception_CANNOT_CLOSE">Intern feil: Kan ikke stoppe tjenesten</string>
+    <string name="exception_UNKNOWN">Ukjent feil!</string>
+    <string name="exception_SIGNAL_CAUGHT">Signalet ble fanget!</string>
+    <string name="exception_NOT_ENOUGH_POWER">Din Android-enhet yter ikke nok strøm til USB-enheten. Du må bruke en eksternt drevet USB-hub eller en eksternt drevet USB OTG-kabel.</string>
+
+</resources>

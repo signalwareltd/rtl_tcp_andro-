@@ -2,7 +2,7 @@
  * rtl_tcp_andro is a library that uses libusb and librtlsdr to
  * turn your Realtek RTL2832 based DVB dongle into a SDR receiver.
  * It independently implements the rtl-tcp API protocol for native Android usage.
- * Copyright (C) 2016 by Martin Marinov <martintzvetomirov@gmail.com>
+ * Copyright (C) 2022 by Signalware Ltd <driver@sdrtouch.com>
  *
  * This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -29,17 +29,18 @@ import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.annotation.NonNull;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentActivity;
-import android.support.v4.app.FragmentTransaction;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.sdrtouch.core.exceptions.SdrException.err_info;
 import com.sdrtouch.rtlsdr.BinaryRunnerService.LocalBinder;
@@ -71,12 +72,7 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 
 		@Override
 		public void onServiceDisconnected(ComponentName name) {
-			runOnUiThread(new Runnable() {
-				@Override
-				public void run() {
-					onoff.setChecked(false);
-				}
-			});
+			runOnUiThread(() -> onoff.setChecked(false));
 			service = null;
 		}
     };
@@ -84,22 +80,12 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
     private final BinaryRunnerService.StatusCallback serviceStatusCallback = new BinaryRunnerService.StatusCallback() {
 		@Override
 		public void onServerRunning() {
-			runOnUiThread(new Runnable() {
-				@Override
-				public void run() {
-					onoff.setChecked(true);
-				}
-			});
+			runOnUiThread(() -> onoff.setChecked(true));
 		}
 		
 		@Override
 		public void onServerNotRunning() {
-			runOnUiThread(new Runnable() {
-				@Override
-				public void run() {
-					onoff.setChecked(false);
-				}
-			});
+			runOnUiThread(() -> onoff.setChecked(false));
 		}
 	};
 
@@ -108,67 +94,43 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_stream);
 
-		terminal = (TextView) findViewById(R.id.terminal);
-		scroll = (ScrollView) findViewById(R.id.ScrollArea);
-		arguments = (EditText) findViewById(R.id.commandline);
+		terminal = findViewById(R.id.terminal);
+		scroll = findViewById(R.id.ScrollArea);
+		arguments = findViewById(R.id.commandline);
 		
 		terminal.setText(Log.getFullLog());
 		
-		findViewById(R.id.enable_gui).setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				StreamActivity.this.findViewById(R.id.statusmsg).setVisibility(View.GONE);
-				StreamActivity.this.findViewById(R.id.gui).setVisibility(View.VISIBLE);
-			}
+		findViewById(R.id.enable_gui).setOnClickListener(v -> {
+			StreamActivity.this.findViewById(R.id.statusmsg).setVisibility(View.GONE);
+			StreamActivity.this.findViewById(R.id.gui).setVisibility(View.VISIBLE);
 		});
 
 		
-		(onoff = (ToggleButton) findViewById(R.id.onoff)).setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				Check.isNotNull(service);
-				if (service.isRunning()) {
-					service.closeService();
-				} else {
-					Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://" + arguments.getText().toString()));
-					intent.setClass(StreamActivity.this, DeviceOpenActivity.class);
-					StreamActivity.this.startActivityForResult(intent, START_REQ_CODE);
-				}
-				onoff.setChecked(service.isRunning());
+		(onoff = findViewById(R.id.onoff)).setOnClickListener(v -> {
+			Check.isNotNull(service);
+			if (service.isRunning()) {
+				service.closeService();
+			} else {
+				Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://" + arguments.getText().toString()));
+				intent.setClass(StreamActivity.this, DeviceOpenActivity.class);
+				StreamActivity.this.startActivityForResult(intent, START_REQ_CODE);
 			}
+			onoff.setChecked(service.isRunning());
 		});
 
-		findViewById(R.id.license).setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View ignored) {
-				showDialog(dialogs.DIAG_LICENSE);
-			}
-		});
+		findViewById(R.id.license).setOnClickListener(ignored -> showDialog(dialogs.DIAG_LICENSE));
 
-		findViewById(R.id.copybutton).setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View ignored) {
-				final String textToClip = terminal.getText().toString();
-				ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-				ClipData clip = ClipData.newPlainText("text label",textToClip);
-				clipboard.setPrimaryClip(clip);
-				Toast.makeText(getApplicationContext(), R.string.copied_to_clip, Toast.LENGTH_LONG).show();
-			}
+		findViewById(R.id.copybutton).setOnClickListener(ignored -> {
+			final String textToClip = terminal.getText().toString();
+			ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+			ClipData clip = ClipData.newPlainText("text label",textToClip);
+			clipboard.setPrimaryClip(clip);
+			Toast.makeText(getApplicationContext(), R.string.copied_to_clip, Toast.LENGTH_LONG).show();
 		});
 		
-		findViewById(R.id.clearbutton).setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				Log.clear();
-			}
-		});
+		findViewById(R.id.clearbutton).setOnClickListener(v -> Log.clear());
 		
-		findViewById(R.id.help).setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				StreamActivity.this.showDialog(dialogs.DIAG_ABOUT);
-			}
-		});
+		findViewById(R.id.help).setOnClickListener(v -> StreamActivity.this.showDialog(dialogs.DIAG_ABOUT));
 
 		if (!RtlSdrApplication.IS_PLATFORM_SUPPORTED) {
 			((TextView) findViewById(R.id.warntext)).setText(R.string.platform_not_supported);
@@ -220,20 +182,18 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 
 	@Override
 	protected void onActivityResult(final int requestCode, final int resultCode, final Intent data) {
-		runOnUiThread(new Runnable() {
-			@Override
-			public void run() {
-				if (requestCode == START_REQ_CODE) {
-					if (resultCode == RESULT_OK)
-						Log.appendLine("Starting was successful!");
-					else {
-						err_info einfo = err_info.unknown_error;
-						try {
-							einfo = err_info.values()[data.getIntExtra("marto.rtl_tcp_andro.RtlTcpExceptionId", err_info.unknown_error.ordinal())];
-						} catch (Throwable ignored) {
-						}
-						Log.appendLine("ERROR STARTING! Reason: " + einfo);
+		super.onActivityResult(requestCode, resultCode, data);
+		runOnUiThread(() -> {
+			if (requestCode == START_REQ_CODE) {
+				if (resultCode == RESULT_OK)
+					Log.appendLine("Starting was successful!");
+				else {
+					err_info einfo = err_info.unknown_error;
+					try {
+						einfo = err_info.values()[data.getIntExtra("marto.rtl_tcp_andro.RtlTcpExceptionId", err_info.unknown_error.ordinal())];
+					} catch (Throwable ignored) {
 					}
+					Log.appendLine("ERROR STARTING! Reason: " + einfo);
 				}
 			}
 		});
@@ -241,12 +201,9 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 	
 	@Override
 	public void onChanged() {
-		runOnUiThread(new Runnable() {
-			@Override
-			public void run() {
-				terminal.setText(Log.getFullLog());
-				scroll.pageScroll(ScrollView.FOCUS_DOWN);
-			}
+		runOnUiThread(() -> {
+			terminal.setText(Log.getFullLog());
+			scroll.pageScroll(ScrollView.FOCUS_DOWN);
 		});
 	}
 }

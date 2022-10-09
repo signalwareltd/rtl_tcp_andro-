@@ -149,7 +149,7 @@ public class Hackrf implements Runnable{
 		BroadcastReceiver permissionBroadcastReceiver = new BroadcastReceiver() {
 		    public void onReceive(Context context, Intent intent) {
 		        if (HACKRF_USB_PERMISSION.equals(intent.getAction())) {
-	                UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+	                UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
 	                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) && device != null) {
 	                	// We have permissions to open the device! Lets init the hackrf instance and
 	                	// return it to the calling application.

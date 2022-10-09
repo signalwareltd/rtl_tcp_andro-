@@ -1,1 +1,19 @@
-include ':app', ':libusb', ':rtlsdr', ':hackrf'
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "rtl_tcp_andro"
+include ':app'
+include ':rtlsdr'
+include ':hackrf'
+include ':sdrdrivertools'

@@ -2,7 +2,7 @@
  * rtl_tcp_andro is a library that uses libusb and librtlsdr to
  * turn your Realtek RTL2832 based DVB dongle into a SDR receiver.
  * It independently implements the rtl-tcp API protocol for native Android usage.
- * Copyright (C) 2016 by Martin Marinov <martintzvetomirov@gmail.com>
+ * Copyright (C) 2022 by Signalware Ltd <driver@sdrtouch.com>
  *
  * This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,8 +24,9 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.DialogFragment;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.DialogFragment;
 
 import com.sdrtouch.core.devices.SdrDevice;
 

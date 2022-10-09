@@ -2,7 +2,7 @@
  * rtl_tcp_andro is a library that uses libusb and librtlsdr to
  * turn your Realtek RTL2832 based DVB dongle into a SDR receiver.
  * It independently implements the rtl-tcp API protocol for native Android usage.
- * Copyright (C) 2016 by Martin Marinov <martintzvetomirov@gmail.com>
+ * Copyright (C) 2022 by Signalware Ltd <driver@sdrtouch.com>
  *
  * This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,13 +22,13 @@ package com.sdrtouch.tools;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.content.DialogInterface;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.DialogFragment;
 import android.text.Html;
 import android.text.method.LinkMovementMethod;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.fragment.app.DialogFragment;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -77,12 +77,7 @@ public class DialogManager extends DialogFragment {
 		else
 			return new AlertDialog.Builder(getActivity())
 		.setTitle(R.string.error)
-		.setPositiveButton(R.string.btn_ok, new DialogInterface.OnClickListener() {
-			@Override
-			public void onClick(DialogInterface dialog1, int which) {
-				dialog1.dismiss();
-			}
-		})
+		.setPositiveButton(R.string.btn_ok, (dialog1, which) -> dialog1.dismiss())
 		.setMessage(R.string.notsupported).create();
 	}
 
@@ -91,23 +86,15 @@ public class DialogManager extends DialogFragment {
 		case DIAG_ABOUT:
 			final AlertDialog addd = new AlertDialog.Builder(getActivity())
 			.setTitle(R.string.help)
-			.setPositiveButton(R.string.btn_ok, new DialogInterface.OnClickListener() {
-				@Override
-				public void onClick(DialogInterface dialog, int which) {
-					dialog.dismiss();
-				}
-			})
+			.setPositiveButton(R.string.btn_ok, (dialog, which) -> dialog.dismiss())
 			.setMessage(Html.fromHtml(getString(R.string.help_info))).create();
 			try {
-				addd.setOnShowListener(new DialogInterface.OnShowListener() {
-					@Override
-					public void onShow(DialogInterface paramDialogInterface) {
-						try {
-							final TextView tv = (TextView) addd.getWindow().findViewById(android.R.id.message);
-							if (tv != null) tv.setMovementMethod(LinkMovementMethod.getInstance());
+				addd.setOnShowListener(paramDialogInterface -> {
+					try {
+						final TextView tv = addd.getWindow().findViewById(android.R.id.message);
+						if (tv != null) tv.setMovementMethod(LinkMovementMethod.getInstance());
 
-						} catch (Exception ignored) {
-						}
+					} catch (Exception ignored) {
 					}
 				});
 			} catch (Exception ignored) {}
@@ -116,12 +103,7 @@ public class DialogManager extends DialogFragment {
 		case DIAG_LICENSE:
 				return new AlertDialog.Builder(getActivity())
 						.setTitle("License")
-						.setPositiveButton(R.string.btn_ok, new DialogInterface.OnClickListener() {
-							@Override
-							public void onClick(DialogInterface dialog, int which) {
-								dialog.dismiss();
-							}
-						})
+						.setPositiveButton(R.string.btn_ok, (dialog, which) -> dialog.dismiss())
 						.setMessage(readWholeStream(R.raw.license))
 						.create();
 		}

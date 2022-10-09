@@ -2,7 +2,7 @@
  * rtl_tcp_andro is a library that uses libusb and librtlsdr to
  * turn your Realtek RTL2832 based DVB dongle into a SDR receiver.
  * It independently implements the rtl-tcp API protocol for native Android usage.
- * Copyright (C) 2016 by Martin Marinov <martintzvetomirov@gmail.com>
+ * Copyright (C) 2022 by Signalware Ltd <driver@sdrtouch.com>
  *
  * This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@
 
 package com.sdrtouch.rtlsdr;
 
+import static com.sdrtouch.rtlsdr.SdrDeviceProviderRegistry.SDR_DEVICE_PROVIDERS;
+
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -30,10 +32,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentActivity;
-import android.support.v4.app.FragmentTransaction;
+
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.sdrtouch.core.SdrTcpArguments;
 import com.sdrtouch.core.devices.SdrDevice;
@@ -42,8 +45,6 @@ import com.sdrtouch.core.exceptions.SdrException;
 import com.sdrtouch.core.exceptions.SdrException.err_info;
 import com.sdrtouch.rtlsdr.BinaryRunnerService.LocalBinder;
 import com.sdrtouch.rtlsdr.driver.RtlSdrDevice;
-import com.sdrtouch.rtlsdr.driver.RtlSdrDeviceProvider;
-import com.sdrtouch.rtlsdr.hackrf.HackRfDeviceProvider;
 import com.sdrtouch.tools.DeviceDialog;
 import com.sdrtouch.tools.ExceptionTools;
 import com.sdrtouch.tools.Log;
@@ -54,12 +55,6 @@ import java.util.List;
 import marto.rtl_tcp_andro.R;
 
 public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog.OnDeviceDialog {
-	
-	private final static SdrDeviceProvider[] SDR_DEVICE_PROVIDERS = new SdrDeviceProvider[] {
-			new RtlSdrDeviceProvider(),
-			new HackRfDeviceProvider(),
-	};
-
 	private SdrTcpArguments sdrTcpArguments;
 	private SdrDevice sdrDevice;
 	private UsbDevice usbDevice;
@@ -98,7 +93,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		try {
 			sdrTcpArguments = SdrTcpArguments.fromString(data.toString().replace("iqsrc://", ""));
 			if (intent.hasExtra(UsbManager.EXTRA_DEVICE)) {
-				usbDevice = (UsbDevice) intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+				usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
 				Log.appendLine("USB device: " + usbDevice.toString());
 			} else {
 				usbDevice = null;
@@ -115,7 +110,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 
 		if (usbDevice != null) {
 			Log.appendLine("onStart with USB device");
-			startServer(new RtlSdrDevice(usbDevice));
+			startServer(new RtlSdrDevice(getApplicationContext(), usbDevice));
 			return;
 		}
 
