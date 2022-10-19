@@ -22,16 +22,13 @@ package com.sdrtouch.rtlsdr;
 
 import static com.sdrtouch.rtlsdr.SdrDeviceProviderRegistry.SDR_DEVICE_PROVIDERS;
 
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.IBinder;
 
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
@@ -43,7 +40,6 @@ import com.sdrtouch.core.devices.SdrDevice;
 import com.sdrtouch.core.devices.SdrDeviceProvider;
 import com.sdrtouch.core.exceptions.SdrException;
 import com.sdrtouch.core.exceptions.SdrException.err_info;
-import com.sdrtouch.rtlsdr.BinaryRunnerService.LocalBinder;
 import com.sdrtouch.rtlsdr.driver.RtlSdrDevice;
 import com.sdrtouch.tools.DeviceDialog;
 import com.sdrtouch.tools.ExceptionTools;
@@ -55,27 +51,11 @@ import java.util.List;
 import marto.rtl_tcp_andro.R;
 
 public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog.OnDeviceDialog {
-	private SdrTcpArguments sdrTcpArguments;
-	private SdrDevice sdrDevice;
-	private UsbDevice usbDevice;
+	private volatile SdrTcpArguments sdrTcpArguments;
+	private volatile UsbDevice usbDevice;
 
-	private boolean isBound = false;
-	private final ServiceConnection mConnection = new ServiceConnection() {
+	private volatile SdrServiceConnection mConnection;
 
-		@Override
-		public void onServiceConnected(ComponentName name, IBinder ibinder) {
-			isBound = true;
-			LocalBinder binder = (LocalBinder) ibinder;
-			binder.startWithDevice(sdrDevice, sdrTcpArguments);
-		}
-
-		@Override
-		public void onServiceDisconnected(ComponentName name) {
-			isBound = false;
-			finishWithError();
-		}
-	};
-	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -153,10 +133,12 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	@Override
 	protected void onStop() {
 		super.onStop();
-		if (isBound) unbindService(mConnection);
+		if (mConnection != null && mConnection.isBound()) {
+			unbindService(mConnection);
+		}
 		
 		usbDevice = null;
-		sdrDevice = null;
+		mConnection = null;
 		sdrTcpArguments = null;
 	}
 	
@@ -181,12 +163,14 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	public void startServer(final SdrDevice sdrDevice) {
 		try {
 			//start the service
-			this.sdrDevice = sdrDevice;
+			mConnection = new SdrServiceConnection(sdrDevice, sdrTcpArguments, this::finishWithError);
 			sdrDevice.addOnStatusListener(onDeviceStatusListener);
 			Intent serviceIntent = new Intent(this, BinaryRunnerService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent);
-            }
+            } else {
+				startService(serviceIntent);
+			}
             bindService(serviceIntent, mConnection, Context.BIND_AUTO_CREATE);
 		} catch (Exception e) {
 			finishWithError(e);

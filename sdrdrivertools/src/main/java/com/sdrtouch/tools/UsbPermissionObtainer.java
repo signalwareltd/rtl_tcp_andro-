@@ -29,6 +29,7 @@ import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.os.Build;
 
 import java.util.concurrent.Future;
 
@@ -37,11 +38,15 @@ public class UsbPermissionObtainer {
     private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
 
     public static Future<UsbDeviceConnection> obtainFdFor(Context ctx, UsbDevice usbDevice) {
+        int flags = 0;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags = PendingIntent.FLAG_IMMUTABLE;
+        }
         UsbManager manager = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
         if (!manager.hasPermission(usbDevice)) {
             AsyncFuture<UsbDeviceConnection> task = new AsyncFuture<>();
             registerNewBroadcastReceiver(ctx, usbDevice, task);
-            manager.requestPermission(usbDevice, PendingIntent.getBroadcast(ctx, 0, new Intent(ACTION_USB_PERMISSION), 0));
+            manager.requestPermission(usbDevice, PendingIntent.getBroadcast(ctx, 0, new Intent(ACTION_USB_PERMISSION), flags));
             return task;
         } else {
             return new CompletedFuture<>(manager.openDevice(usbDevice));
@@ -57,7 +62,7 @@ public class UsbPermissionObtainer {
                     synchronized (this) {
                         UsbManager manager = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
                         UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                        if (device.equals(usbDevice)) {
+                        if (device != null && device.equals(usbDevice)) {
                             if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                                 if (!manager.hasPermission(device)) {
                                     Log.appendLine("Permissions were granted but can't access the device");
@@ -72,7 +77,7 @@ public class UsbPermissionObtainer {
                             }
                             context.unregisterReceiver(this);
                         } else {
-                            Log.appendLine("Got a permission for an unexpected device %s. Expected %s.", device, usbDevice);
+                            Log.appendLine("Got a permission for an unexpected device %s. Expected %s.", device == null ? "NULL" : device, usbDevice);
                             task.setDone(null);
                         }
                     }

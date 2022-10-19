@@ -12,6 +12,7 @@ import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
 import android.hardware.usb.UsbRequest;
+import android.os.Build;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -179,8 +180,12 @@ public class Hackrf implements Runnable{
 		};
 
         if (!usbManager.hasPermission(hackrfUsbDvice)) {
+			int flags = 0;
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				flags = PendingIntent.FLAG_IMMUTABLE;
+			}
             // Now create a intent to request for the permissions and register the broadcast receiver for it:
-            PendingIntent mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(HACKRF_USB_PERMISSION), 0);
+            PendingIntent mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(HACKRF_USB_PERMISSION), flags);
             IntentFilter filter = new IntentFilter(HACKRF_USB_PERMISSION);
             context.registerReceiver(permissionBroadcastReceiver, filter);
 

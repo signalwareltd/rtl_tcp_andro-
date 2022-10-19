@@ -123,6 +123,8 @@ public class BinaryRunnerService extends Service {
         }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+				.setAutoCancel(false)
+				.setOngoing(true)
                 .setContentTitle(getText(R.string.app_name));
 
 		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN) {
@@ -224,8 +226,12 @@ public class BinaryRunnerService extends Service {
 			Check.isNotNull(sdrDevice);
 			Check.isNotNull(sdrTcpArguments);
 			addWork(sdrDevice, sdrTcpArguments);
-			if (!isRunning) startService(new Intent(getApplicationContext(), BinaryRunnerService.class));
-			else closeService();
+			if (!isRunning) {
+				Intent intent = new Intent(getApplicationContext(), BinaryRunnerService.class);
+				startService(intent);
+			} else {
+				closeService();
+			}
 		}
 	}
 

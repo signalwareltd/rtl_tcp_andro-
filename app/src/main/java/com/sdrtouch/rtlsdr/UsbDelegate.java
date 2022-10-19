@@ -40,13 +40,15 @@ public class UsbDelegate extends Activity {
 
         if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
             UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-            Log.appendLine(TAG + " USB attached: " + usbDevice.getDeviceName());
-            Intent newIntent = new Intent(BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED);
-            newIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
-            try {
-                startActivity(newIntent);
-            } catch (ActivityNotFoundException e) {
-                Log.appendLine(TAG + " no activity found for SDR handling");
+            if (usbDevice != null) {
+                Log.appendLine(TAG + " USB attached: " + usbDevice.getDeviceName());
+                Intent newIntent = new Intent(BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED);
+                newIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
+                try {
+                    startActivity(newIntent);
+                } catch (ActivityNotFoundException e) {
+                    Log.appendLine(TAG + " no activity found for SDR handling");
+                }
             }
         }
 
