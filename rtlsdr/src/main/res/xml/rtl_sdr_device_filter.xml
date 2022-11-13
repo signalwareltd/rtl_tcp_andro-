@@ -21,6 +21,7 @@
     <usb-device vendor-id="0x0ccd" product-id="0x00e0"/> <!-- Terratec NOXON DAB/DAB+ USB dongle (rev 2)-->
     <usb-device vendor-id="0x1554" product-id="0x5020"/> <!-- PixelView PV-DT235U(RN)-->
     <usb-device vendor-id="0x15f4" product-id="0x0131"/> <!-- Astrometa DVB-T/DVB-T2-->
+    <usb-device vendor-id="0x15f4" product-id="0x0133"/> <!-- HanfTek DAB+FM+DVB-T-->
     <usb-device vendor-id="0x185b" product-id="0x0620"/> <!-- Compro Videomate U620F-->
     <usb-device vendor-id="0x185b" product-id="0x0650"/> <!-- Compro Videomate U650F-->
     <usb-device vendor-id="0x185b" product-id="0x0680"/> <!-- Compro Videomate U680F-->
