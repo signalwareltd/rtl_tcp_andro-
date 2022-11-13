@@ -27,7 +27,7 @@
 	    USB DVB-T-pinner basert på RTL2832U-chippen.</p>
 	    <p>Den gjør det også mulig for Android å strømme over nettverket direkte ifra driverens grensesnitt. Dette er en avansert egenskap og det kan være bugs i den.</p>
 		<h2>Bemerkninger og lisens</h2>
-		<p>Appen er for øyeblikket eksperimentell og kan være ustabil. Del gjerne dine opplevelser <a href="mailto:martintzvetomirov@gmail.com">ved å sende meg en E-post</a>.</p>
+		<p>Appen er for øyeblikket eksperimentell og kan være ustabil. Del gjerne dine opplevelser <a href="mailto:driver@sdrtouch.com">ved å sende meg en E-post</a>.</p>
 		<p>Denne appen er åpen-kildet og er lisensiert som GPL2+. Kildekoden kan bli sett hos <a href="https://github.com/martinmarinov/rtl_tcp_andro-">github.com/martinmarinov/rtl_tcp_andro-</a></p>
 		<p>For detaljert informasjon om lisensen, bruk Lisens-knappen.</p>
 		<h2>Inkludert åpen-kildet programvare</h2>
