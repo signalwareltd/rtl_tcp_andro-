@@ -88,6 +88,7 @@
 
         <service
             android:name="com.sdrtouch.rtlsdr.BinaryRunnerService"
+            android:foregroundServiceType="connectedDevice"
             android:exported="false" />
     </application>
 </manifest>

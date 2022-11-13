@@ -228,7 +228,11 @@ public class BinaryRunnerService extends Service {
 			addWork(sdrDevice, sdrTcpArguments);
 			if (!isRunning) {
 				Intent intent = new Intent(getApplicationContext(), BinaryRunnerService.class);
-				startService(intent);
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+					startForegroundService(intent);
+				} else {
+					startService(intent);
+				}
 			} else {
 				closeService();
 			}
