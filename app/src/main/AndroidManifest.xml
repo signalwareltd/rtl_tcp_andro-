@@ -35,6 +35,7 @@
         <package android:name="io.welle.welle" />
         <package android:name="com.enthusiasticcoder.adsbflightmonitor" />
         <package android:name="com.sdr_labs.magicsdr" />
+        <package android:name="eu.ebctech.dump1090" />
     </queries>
 
     <uses-feature

@@ -61,6 +61,7 @@ If you want to control the tuner, such as set the central frequency, you can sen
 * [welle.io](https://play.google.com/store/apps/details?id=io.welle.welle)
 * [MagicSDR](https://play.google.com/store/apps/details?id=com.sdr_labs.magicsdr)
 * [ADSB Flight Tracker](https://play.google.com/store/apps/details?id=com.enthusiasticcoder.adsbflightmonitor)
+* [Dump1090](https://play.google.com/store/apps/details?id=eu.ebctech.dump1090)
 
 Open a github issue if you want your app to be featured here!
 
