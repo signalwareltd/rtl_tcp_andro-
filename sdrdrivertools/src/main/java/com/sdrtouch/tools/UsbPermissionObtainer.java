@@ -20,7 +20,6 @@
 
 package com.sdrtouch.tools;
 
-import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -33,14 +32,13 @@ import android.os.Build;
 
 import java.util.concurrent.Future;
 
-@SuppressLint("NewApi")
 public class UsbPermissionObtainer {
     private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
 
     public static Future<UsbDeviceConnection> obtainFdFor(Context ctx, UsbDevice usbDevice) {
         int flags = 0;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            flags = PendingIntent.FLAG_IMMUTABLE;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            flags = PendingIntent.FLAG_MUTABLE;
         }
         UsbManager manager = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
         if (!manager.hasPermission(usbDevice)) {

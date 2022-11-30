@@ -181,8 +181,8 @@ public class Hackrf implements Runnable{
 
         if (!usbManager.hasPermission(hackrfUsbDvice)) {
 			int flags = 0;
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-				flags = PendingIntent.FLAG_IMMUTABLE;
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+				flags = PendingIntent.FLAG_MUTABLE;
 			}
             // Now create a intent to request for the permissions and register the broadcast receiver for it:
             PendingIntent mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(HACKRF_USB_PERMISSION), flags);
