@@ -139,7 +139,6 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 		
 		usbDevice = null;
 		mConnection = null;
-		sdrTcpArguments = null;
 	}
 	
 	public void showDialog(final DialogFragment dialog) {
