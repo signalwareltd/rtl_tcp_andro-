@@ -10,3 +10,5 @@
 *.aab
 /.idea/markdown-navigator.xml
 /.idea/markdown-navigator/profiles_settings.xml
+private_key.pepk
+rtl_tcp_andro_keystore.jks
