@@ -34,6 +34,7 @@ public class SdrTcpArguments implements Serializable {
     private static final int DEFAULT_PPM = 0;
     private static final long DEFAULT_FREQUENCY = 100000000;
     private static final long DEFAULT_SAMPLING_RATE = 2048000;
+    private static final int DEFAULT_BIAST = 0;
 
 	private final int gain;
 	private final long samplerateHz;
@@ -41,6 +42,7 @@ public class SdrTcpArguments implements Serializable {
 	private final String address;
 	private final int port;
 	private final int ppm;
+    private final int biast;
 
 	public static SdrTcpArguments fromString(String arguments) throws IllegalArgumentException {
 		return new SdrTcpArguments(new ArgumentParser(arguments));
@@ -53,6 +55,7 @@ public class SdrTcpArguments implements Serializable {
         this.address = stringLessThan(arguments.getStringArgument("a"), MAX_STRING_LENGTH);
         this.port = arguments.getIntArgument("p");
         this.ppm = arguments.getIntArgumentOrDefault("P", DEFAULT_PPM);
+        this.biast = arguments.getIntArgumentOrDefault("T", DEFAULT_BIAST);
 	}
 
     public int getGain() {
@@ -79,6 +82,8 @@ public class SdrTcpArguments implements Serializable {
         return ppm;
     }
 
+    public int getBiasT() { return biast; }
+
     @Override
     public String toString() {
         return "SdrTcpArguments{" +
@@ -88,6 +93,7 @@ public class SdrTcpArguments implements Serializable {
                 ", address='" + address + '\'' +
                 ", port=" + port +
                 ", ppm=" + ppm +
+                ", biast=" + biast +
                 '}';
     }
 }

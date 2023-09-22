@@ -51,7 +51,7 @@ public class RtlSdrDevice extends SdrDevice {
                 try {
                     int fd = openSessionAndGetFd();
                     String path = usbDevice.getDeviceName();
-                    if (!openAsync(nativeHandler, fd, sdrTcpArguments.getGain(), sdrTcpArguments.getSamplerateHz(), sdrTcpArguments.getFrequencyHz(), sdrTcpArguments.getPort(), sdrTcpArguments.getPpm(), sdrTcpArguments.getAddress(), path)) {
+                    if (!openAsync(nativeHandler, fd, sdrTcpArguments.getGain(), sdrTcpArguments.getSamplerateHz(), sdrTcpArguments.getFrequencyHz(), sdrTcpArguments.getPort(), sdrTcpArguments.getPpm(), sdrTcpArguments.getBiasT(),sdrTcpArguments.getAddress(), path)) {
                         announceOnClosed(new SdrException(SdrException.EXIT_UNKNOWN));
                     } else {
                         announceOnClosed(null);
@@ -93,5 +93,5 @@ public class RtlSdrDevice extends SdrDevice {
     private native long initialize();
     private native void close(long pointer);
     private native void deInit(long pointer);
-    private native boolean openAsync(long pointer, int fd, int gain, long samplingrate, long frequency, int port, int ppm, String address, String devicePath) throws Exception;
+    private native boolean openAsync(long pointer, int fd, int gain, long samplingrate, long frequency, int port, int ppm, int biast, String address, String devicePath) throws Exception;
 }

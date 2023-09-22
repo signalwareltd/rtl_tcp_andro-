@@ -184,9 +184,9 @@ void rtlsdr_callback(unsigned char *buf, uint32_t len, void *pointer) {
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync__JIIJJIILjava_lang_String_2Ljava_lang_String_2(
+Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
         JNIEnv *env, jobject instance, jlong pointer, jint fd, jint gain, jlong samplingrate,
-        jlong frequency, jint port, jint ppm, jstring address_, jstring devicePath_) {
+        jlong frequency, jint port, jint ppm, jint biast, jstring address_, jstring devicePath_) {
     WITH_DEV(dev);
     const char *devicePath = (*env)->GetStringUTFChars(env, devicePath_, 0);
     const char *address = (*env)->GetStringUTFChars(env, address_, 0);
@@ -196,6 +196,10 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync__JIIJJIILjava_lang_String
 
     rtlsdr_dev_t * device = NULL;
     RUN_OR_GOTO(rtlsdr_open2(&device, fd, devicePath), rel_jni);
+
+    if (rtlsdr_set_bias_tee(device, biast) < 0) {
+        LOGI("WARNING: Failed to set biast to %d", biast);
+    }
 
     if (ppm != 0) {
         if (rtlsdr_set_freq_correction(device, ppm) < 0) {
