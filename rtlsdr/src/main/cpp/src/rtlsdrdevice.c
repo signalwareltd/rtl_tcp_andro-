@@ -25,6 +25,7 @@
 #include "sdrtcp.h"
 #include "SdrException.h"
 #include "tcp_commands.h"
+#include "rtlsdr_i2c.h"
 
 #define RUN_OR(command, exit_command) { \
     int cmd_result = command; \

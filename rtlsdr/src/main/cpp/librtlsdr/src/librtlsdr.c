@@ -68,6 +68,8 @@ enum rtlsdr_async_status {
 };
 
 #define FIR_LEN 16
+#define EEPROM_SIZE	256
+#define STR_OFFSET	0x09
 
 /*
  * FIR coefficients.
@@ -120,6 +122,9 @@ struct rtlsdr_dev {
 	int dev_lost;
 	int driver_active;
 	unsigned int xfer_errors;
+	char manufact[256];
+	char product[256];
+	int force_bt;
 };
 
 void rtlsdr_set_gpio_bit(rtlsdr_dev_t *dev, uint8_t gpio, int val);
@@ -798,7 +803,7 @@ int rtlsdr_get_usb_strings(rtlsdr_dev_t *dev, char *manufact, char *product,
 		libusb_get_string_descriptor_ascii(dev->devh, dd.iManufacturer,
 						   (unsigned char *)manufact,
 						   buf_max);
-	}
+    }
 
 	if (product) {
 		memset(product, 0, buf_max);
@@ -1431,6 +1436,15 @@ int rtlsdr_get_index_by_serial(const char *serial)
 	return -3;
 }
 
+/* Returns true if the manufact_check and product_check strings match what is in the dongles EEPROM */
+int rtlsdr_check_dongle_model(void *dev, char *manufact_check, char *product_check)
+{
+	if ((strcmp(((rtlsdr_dev_t *)dev)->manufact, manufact_check) == 0 && strcmp(((rtlsdr_dev_t *)dev)->product, product_check) == 0))
+		return 1;
+
+	return 0;
+}
+
 int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 {
 	int r;
@@ -1529,10 +1543,13 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 	rtlsdr_init_baseband(dev);
 	dev->dev_lost = 0;
 
-	/* Probe tuners */
+    /* Get device manufacturer and product id */
+    r = rtlsdr_get_usb_strings(dev, dev->manufact, dev->product, NULL);
+
+    /* Probe tuners */
 	rtlsdr_set_i2c_repeater(dev, 1);
 
-	reg = rtlsdr_i2c_read_reg(dev, E4K_I2C_ADDR, E4K_CHECK_ADDR);
+    reg = rtlsdr_i2c_read_reg(dev, E4K_I2C_ADDR, E4K_CHECK_ADDR);
 	if (reg == E4K_CHECK_VAL) {
 		fprintf(stderr, "Found Elonics E4000 tuner\n");
 		dev->tuner_type = RTLSDR_TUNER_E4000;
@@ -1556,6 +1573,10 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 	reg = rtlsdr_i2c_read_reg(dev, R828D_I2C_ADDR, R82XX_CHECK_ADDR);
 	if (reg == R82XX_CHECK_VAL) {
 		fprintf(stderr, "Found Rafael Micro R828D tuner\n");
+
+		if (rtlsdr_check_dongle_model(dev, "RTLSDRBlog", "Blog V4"))
+			fprintf(stderr, "RTL-SDR Blog V4 Detected\n");
+
 		dev->tuner_type = RTLSDR_TUNER_R828D;
 		goto found;
 	}
@@ -1589,7 +1610,10 @@ found:
 
 	switch (dev->tuner_type) {
 	case RTLSDR_TUNER_R828D:
-		dev->tun_xtal = R828D_XTAL_FREQ;
+		/* If NOT an RTL-SDR Blog V4, set typical R828D 16 MHz freq. Otherwise, keep at 28.8 MHz. */
+		if (!(rtlsdr_check_dongle_model(dev, "RTLSDRBlog", "Blog V4"))) {
+			dev->tun_xtal = R828D_XTAL_FREQ;
+		}
 		/* fall-through */
 	case RTLSDR_TUNER_R820T:
 		/* disable Zero-IF mode */
@@ -2012,6 +2036,12 @@ int rtlsdr_set_bias_tee_gpio(rtlsdr_dev_t *dev, int gpio, int on)
 	if (!dev)
 		return -1;
 
+	/* If it's the bias tee GPIO, and force bias tee is on
+	* don't allow the bias tee to turn off. Prevents software
+	* that initializes with the bias tee off from turning it off */
+	if(gpio == 0 && dev->force_bt)
+		on = 1;
+
 	rtlsdr_set_gpio_output(dev, gpio);
 	rtlsdr_set_gpio_bit(dev, gpio, on);
 
@@ -2022,6 +2052,24 @@ int rtlsdr_set_bias_tee(rtlsdr_dev_t *dev, int on)
 {
 	return rtlsdr_set_bias_tee_gpio(dev, 0, on);
 }
+
+int get_string_descriptor(int pos, uint8_t *data, char *str)
+{
+	int len, i, j = 0;
+
+	len = data[pos];
+
+	if (data[pos + 1] != 0x03)
+		fprintf(stderr, "Error: invalid string descriptor!\n");
+
+	for (i = 2; i < len; i += 2)
+		str[j++] = data[pos + i];
+
+	str[j] = 0x00;
+
+	return pos + i;
+}
+
 
 
 // Patch for Android
@@ -2035,6 +2083,8 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	rtlsdr_dev_t *dev = NULL;
 	libusb_device *device = NULL;
 	uint8_t reg;
+	uint8_t buf[EEPROM_SIZE];
+	int pos;
 
 	dev = malloc(sizeof(rtlsdr_dev_t));
 	if (NULL == dev)
@@ -2096,6 +2146,15 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	rtlsdr_init_baseband(dev);
 	dev->dev_lost = 0;
 
+	/* Get device manufacturer and product id
+	 * NOTE: The sstandard way to get these strings from libusb doesn't work on Android
+	 * Instead grab them directly from the EEPROM
+	 * */
+
+	r = rtlsdr_read_eeprom(dev, buf, 0, EEPROM_SIZE);
+	pos = get_string_descriptor(STR_OFFSET, buf, dev->manufact);
+	get_string_descriptor(pos, buf, dev->product);
+
 	/* Probe tuners */
 	rtlsdr_set_i2c_repeater(dev, 1);
 
@@ -2123,6 +2182,10 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	reg = rtlsdr_i2c_read_reg(dev, R828D_I2C_ADDR, R82XX_CHECK_ADDR);
 	if (reg == R82XX_CHECK_VAL) {
 		LOGI("ERROR: Found Rafael Micro R828D tuner\n");
+
+        if (rtlsdr_check_dongle_model(dev, "RTLSDRBlog", "Blog V4"))
+            LOGI("ERROR: RTL-SDR Blog V4 Detected\n");
+
 		dev->tuner_type = RTLSDR_TUNER_R828D;
 		goto found;
 	}
@@ -2154,10 +2217,15 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	dev->tun_xtal = dev->rtl_xtal;
 	dev->tuner = &tuners[dev->tuner_type];
 
+    LOGI("TESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTESTTEST\n");
+
 	switch (dev->tuner_type) {
 		case RTLSDR_TUNER_R828D:
-			dev->tun_xtal = R828D_XTAL_FREQ;
-			/* fall-through */
+            /* If NOT an RTL-SDR Blog V4, set typical R828D 16 MHz freq. Otherwise, keep at 28.8 MHz. */
+            if (!(rtlsdr_check_dongle_model(dev, "RTLSDRBlog", "Blog V4"))) {
+                dev->tun_xtal = R828D_XTAL_FREQ;
+            }
+            /* fall-through */
 		case RTLSDR_TUNER_R820T:
 			/* disable Zero-IF mode */
 			rtlsdr_demod_write_reg(dev, 1, 0xb1, 0x1a, 1);
@@ -2179,6 +2247,13 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 		default:
 			break;
 	}
+
+	/* Hack to force the Bias T to always be on if we set the IR-Endpoint
+	* bit in the EEPROM to 0. Default on EEPROM is 1.
+	*/
+	dev->force_bt = (buf[7] & 0x02) ? 0 : 1;
+	if(dev->force_bt)
+		rtlsdr_set_bias_tee(dev, 1);
 
 	if (dev->tuner->init)
 		r = dev->tuner->init(dev);
