@@ -6,7 +6,7 @@
 	<string name="stream">Start stream</string>
 	<string name="kill">Kill</string>
 	<string name="args_hint">sdr_tcp command line arguments</string>
-	<string name="default_args">-a 0.0.0.0 -p 14423 -f 91800000 -s 1024000</string>
+	<string name="default_args">-a 0.0.0.0 -p 14423 -f 91800000 -s 1024000 -T 0</string>
 	<string name="copy">Copy</string>
 	<string name="copied_to_clip">Output was copied to clipboard</string>
 	<string name="clear">Clear</string>
