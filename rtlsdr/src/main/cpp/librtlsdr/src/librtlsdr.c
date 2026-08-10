@@ -1566,6 +1566,10 @@ int rtlsdr_open(rtlsdr_dev_t **out_dev, uint32_t index)
 	reg = rtlsdr_i2c_read_reg(dev, R820T_I2C_ADDR, R82XX_CHECK_ADDR);
 	if (reg == R82XX_CHECK_VAL) {
 		fprintf(stderr, "Found Rafael Micro R820T tuner\n");
+
+		if (rtlsdr_check_dongle_model(dev, "RTLSDRBlog", "Blog V4L"))
+			fprintf(stderr, "RTL-SDR Blog V4 Lite Detected\n");
+
 		dev->tuner_type = RTLSDR_TUNER_R820T;
 		goto found;
 	}
@@ -2175,6 +2179,10 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	reg = rtlsdr_i2c_read_reg(dev, R820T_I2C_ADDR, R82XX_CHECK_ADDR);
 	if (reg == R82XX_CHECK_VAL) {
 		LOGI("ERROR: Found Rafael Micro R820T tuner\n");
+
+        if (rtlsdr_check_dongle_model(dev, "RTLSDRBlog", "Blog V4L"))
+            LOGI("ERROR: RTL-SDR Blog V4 Lite Detected\n");
+
 		dev->tuner_type = RTLSDR_TUNER_R820T;
 		goto found;
 	}
