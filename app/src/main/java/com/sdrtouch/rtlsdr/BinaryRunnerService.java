@@ -156,7 +156,9 @@ public class BinaryRunnerService extends Service {
 			}
 
 			Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
-			bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
+			if (thisSdrDevice != null) {
+				bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
+			}
 			sendBroadcast(bIntent);
 
 			stopForeground(true);
