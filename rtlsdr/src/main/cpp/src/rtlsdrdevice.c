@@ -37,13 +37,9 @@
 
 #define RUN_OR_GOTO(command, label) RUN_OR(command, goto label);
 
-#include <pthread.h>
-
 typedef struct rtlsdr_android {
     sdrtcp_t tcpserv;
     rtlsdr_dev_t * rtl_dev;
-    pthread_mutex_t lock;
-    volatile int do_exit;
 } rtlsdr_android_t;
 
 #define WITH_DEV(x) rtlsdr_android_t* x = (rtlsdr_android_t*) pointer
@@ -109,11 +105,7 @@ static jint SUPPORTED_COMMANDS[] = {
 
 void tcpCommandCallback(sdrtcp_t * tcpserv, void * pointer, sdr_tcp_command_t * cmd) {
     WITH_DEV(dev);
-    pthread_mutex_lock(&dev->lock);
-    if (dev->rtl_dev == NULL) {
-        pthread_mutex_unlock(&dev->lock);
-        return;
-    }
+    if (dev->rtl_dev == NULL) return;
 
     switch(cmd->command) {
         case TCP_SET_FREQ:
@@ -182,29 +174,15 @@ void tcpCommandCallback(sdrtcp_t * tcpserv, void * pointer, sdr_tcp_command_t * 
 
 void tcpClosedCallback(sdrtcp_t * tcpserv, void * pointer) {
     WITH_DEV(dev);
-    LOGI("tcpClosedCallback: Cancelling async transfers");
-    pthread_mutex_lock(&dev->lock);
-    dev->do_exit = 1;
-    if (dev->rtl_dev == NULL) {
-        pthread_mutex_unlock(&dev->lock);
-        return;
-    }
+    if (dev->rtl_dev == NULL) return;
     rtlsdr_cancel_async(dev->rtl_dev);
-    pthread_mutex_unlock(&dev->lock);
 }
 
 void rtlsdr_callback(unsigned char *buf, uint32_t len, void *pointer) {
     WITH_DEV(dev);
-    pthread_mutex_lock(&dev->lock);
-    if (dev->do_exit || dev->rtl_dev == NULL) {
-        pthread_mutex_unlock(&dev->lock);
-        return;
-    }
+    if (dev->rtl_dev == NULL) return;
     sdrtcp_feed(&dev->tcpserv, buf, len / 2);
-    pthread_mutex_unlock(&dev->lock);
 }
-
-
 
 JNIEXPORT jboolean JNICALL
 Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
@@ -266,38 +244,26 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
     if (rtlsdr_reset_buffer(device) < 0)
         LOGI("WARNING: Failed to reset buffers");
 
-    pthread_mutex_lock(&dev->lock);
     if (!sdrtcp_open_socket(&dev->tcpserv, address, port, "RTL0", rtlsdr_get_tuner_type(device), (uint32_t) rtlsdr_get_tuner_gains(device, NULL))) {
-        pthread_mutex_unlock(&dev->lock);
         RUN_OR(EXIT_WRONG_ARGS, goto err);
     }
-    pthread_mutex_unlock(&dev->lock);
 
-    pthread_mutex_lock(&dev->lock);
-    dev->do_exit = 0;
     dev->rtl_dev = device;
-    pthread_mutex_unlock(&dev->lock);
     sdrtcp_serve_client_async(&dev->tcpserv, (void *) dev, tcpCommandCallback, tcpClosedCallback);
 
     int succesful = 1;
     EXCEPT_DO((*env)->CallVoidMethod(env, instance, announceOnOpen), succesful  = 0);
 
-    pthread_mutex_lock(&dev->lock);
     int read_result = rtlsdr_read_async(device, rtlsdr_callback, (void *) dev, 0, 0);
-    pthread_mutex_unlock(&dev->lock);
-
     if (read_result) {
         LOGI("rtlsdr_read_async failed: %d", read_result);
         succesful = 0;
     }
     LOGI("rtlsdr_read_async finished successfully");
 
-    pthread_mutex_lock(&dev->lock);
     dev->rtl_dev = NULL;
-    pthread_mutex_unlock(&dev->lock);
     rtlsdr_close(device);
     sdrtcp_stop_serving_client(&dev->tcpserv);
-    pthread_mutex_unlock(&dev->lock);
 
     (*env)->ReleaseStringUTFChars(env, address_, address);
     (*env)->ReleaseStringUTFChars(env, devicePath_, devicePath);
@@ -319,22 +285,17 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_initialize(JNIEnv *env, jobject ins
     rtlsdr_android_t* ptr = malloc(sizeof(rtlsdr_android_t));
     sdrtcp_init(&ptr->tcpserv);
     ptr->rtl_dev = NULL;
-    ptr->do_exit = 0;
-    pthread_mutex_init(&ptr->lock, NULL);
     return (jlong) ptr;
 }
 
 JNIEXPORT void JNICALL
 Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_deInit(JNIEnv *env, jobject instance, jlong pointer) {
     WITH_DEV(dev);
-    pthread_mutex_lock(&dev->lock);
     sdrtcp_free(&dev->tcpserv);
     if (dev->rtl_dev != NULL) {
         rtlsdr_close(dev->rtl_dev);
         dev->rtl_dev = NULL;
     }
-    pthread_mutex_unlock(&dev->lock);
-    pthread_mutex_destroy(&dev->lock);
     free((void *) dev);
 }
 
@@ -342,9 +303,7 @@ JNIEXPORT void JNICALL
 Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_close__J(JNIEnv *env, jobject instance,
                                                       jlong pointer) {
     WITH_DEV(dev);
-    pthread_mutex_lock(&dev->lock);
     sdrtcp_stop_serving_client(&dev->tcpserv);
-    pthread_mutex_unlock(&dev->lock);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_getSupportedCommands(JNIEnv *env, jobject instance) {
