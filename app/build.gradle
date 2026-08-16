@@ -10,8 +10,8 @@ android {
         applicationId "marto.rtl_tcp_andro"
         minSdk 24
         targetSdk 37
-        versionCode 32
-        versionName "3.152"
+        versionCode 33
+        versionName "3.16"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
