@@ -34,7 +34,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/**/*.apk
+            app/build/outputs/**/*.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
