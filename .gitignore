@@ -10,3 +10,7 @@
 *.aab
 /.idea/markdown-navigator.xml
 /.idea/markdown-navigator/profiles_settings.xml
+
+# Planning and Artifacts
+.artifacts/
+planningmode.xml

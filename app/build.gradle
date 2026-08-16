@@ -4,12 +4,12 @@ plugins {
 
 android {
     namespace 'marto.rtl_tcp_andro'
-    compileSdk 34
+    compileSdk 37
 
     defaultConfig {
         applicationId "marto.rtl_tcp_andro"
-        minSdk 21
-        targetSdk 36
+        minSdk 24
+        targetSdk 37
         versionCode 32
         versionName "3.152"
 
@@ -30,11 +30,11 @@ android {
 
 dependencies {
 
-    implementation 'androidx.appcompat:appcompat:1.5.1'
-    implementation 'com.google.android.material:material:1.6.1'
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'com.google.android.material:material:1.14.0'
     testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.3'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.7.0'
 
     implementation project(path: ':sdrdrivertools')
     implementation project(path: ':hackrf')

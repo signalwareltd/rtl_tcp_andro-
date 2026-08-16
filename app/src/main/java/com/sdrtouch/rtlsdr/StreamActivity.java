@@ -20,13 +20,16 @@
 
 package com.sdrtouch.rtlsdr;
 
+import android.Manifest;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.view.View;
@@ -37,6 +40,8 @@ import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
@@ -59,6 +64,7 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 	private ToggleButton onoff;
 
 	private static final int START_REQ_CODE = 1;
+	private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 2;
 	
 	private BinaryRunnerService service;
 	private final ServiceConnection mConnection = new ServiceConnection() {
@@ -111,9 +117,12 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 			if (service.isRunning()) {
 				service.closeService();
 			} else {
-				Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://" + arguments.getText().toString()));
-				intent.setClass(StreamActivity.this, DeviceOpenActivity.class);
-				StreamActivity.this.startActivityForResult(intent, START_REQ_CODE);
+				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+						ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+					ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
+				} else {
+					startServiceFlow();
+				}
 			}
 			onoff.setChecked(service.isRunning());
 		});
@@ -199,6 +208,24 @@ public class StreamActivity extends FragmentActivity implements Log.Callback {
 		});
 	}
 	
+	@Override
+	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+			if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+				startServiceFlow();
+			} else {
+				Toast.makeText(this, "Notification permission is required for the foreground service", Toast.LENGTH_SHORT).show();
+			}
+		}
+	}
+
+	private void startServiceFlow() {
+		Intent intent = new Intent(Intent.ACTION_VIEW).setData(Uri.parse("iqsrc://" + arguments.getText().toString()));
+		intent.setClass(StreamActivity.this, DeviceOpenActivity.class);
+		StreamActivity.this.startActivityForResult(intent, START_REQ_CODE);
+	}
+
 	@Override
 	public void onChanged() {
 		runOnUiThread(() -> {
