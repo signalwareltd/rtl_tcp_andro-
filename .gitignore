@@ -13,4 +13,5 @@
 
 # Planning and Artifacts
 .artifacts/
-planningmode.xml
+planningMode.xml
+.idea/planningMode.xml
