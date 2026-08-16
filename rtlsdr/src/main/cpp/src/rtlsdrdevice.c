@@ -163,6 +163,7 @@ void tcpCommandCallback(sdrtcp_t * tcpserv, void * pointer, sdr_tcp_command_t * 
             sdrtcp_stop_serving_client(tcpserv);
             break;
         case TCP_ANDROID_GAIN_BY_PERCENTAGE:
+            LOGI("set gain by percentage %ld", cmd->parameter);
             set_gain_by_perc(dev->rtl_dev, cmd->parameter);
             break;
         default:
