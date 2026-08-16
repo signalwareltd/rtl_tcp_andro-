@@ -273,7 +273,10 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
     }
     pthread_mutex_unlock(&dev->lock);
 
+    pthread_mutex_lock(&dev->lock);
+    dev->do_exit = 0;
     dev->rtl_dev = device;
+    pthread_mutex_unlock(&dev->lock);
     sdrtcp_serve_client_async(&dev->tcpserv, (void *) dev, tcpCommandCallback, tcpClosedCallback);
 
     int succesful = 1;
@@ -292,7 +295,6 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
     pthread_mutex_lock(&dev->lock);
     dev->rtl_dev = NULL;
     pthread_mutex_unlock(&dev->lock);
-    pthread_mutex_lock(&dev->lock);
     rtlsdr_close(device);
     sdrtcp_stop_serving_client(&dev->tcpserv);
     pthread_mutex_unlock(&dev->lock);
