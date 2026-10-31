@@ -145,6 +145,10 @@ adb shell am start -a android.intent.action.VIEW \
 Prefer running the client **on the device** with toybox `nc`. `adb forward tcp:1234 tcp:1234` hung
 over the wireless-ADB link during testing; do not block a test run on it.
 
+If the device has no `nc` (Android 9 and older often lack it), start the driver bound to the LAN
+with `-a 0.0.0.0` and run the client from the host against `<phone-ip>:1234`. This is also the
+simplest way to create a stalled client (connect and never read).
+
 ```sh
 # ~4 MB/s at 2.048 Msps; cap the capture and delete it afterwards
 adb shell 'sleep 2 | nc -W 2 127.0.0.1 1234 | head -c 500000 > /sdcard/rtl_capture.bin; ls -l /sdcard/rtl_capture.bin'
@@ -314,6 +318,10 @@ Short list; full symptoms and workarounds in `references/known-issues.md`.
 - **Also fixed on that branch (Phase 2)**: asynchronous `sdrtcp` teardown vs. the finalizer (the JNI
   now joins the server thread before `rtlsdr_close`), `dev->rtl_dev` lifetime, the cancellation
   free-while-flying window, and session serialization. See the parent plan §6c.
+- **Android 9 has no `nc`**: use `-a 0.0.0.0` and a host client (see section 4).
+- **Huawei/EMUI freezes the app when the screen is off**: native threads sit in `__refrigerator`,
+  connections queue in the kernel backlog but are never accepted. Keep the screen on and whitelist
+  the driver from battery optimisation. Details in references/known-issues.md.
 
 ## 10. Quick checklist
 
@@ -323,6 +331,6 @@ Short list; full symptoms and workarounds in `references/known-issues.md`.
 - [ ] SDR Touch connects and sends tuning commands
 - [ ] `0x7e` / client close ends the session cleanly
 - [ ] unplug with an active client: fast clean teardown, no crash, reopen works
-- [ ] unplug with no client: teardown finishes (≤ ~7 s on current builds), no crash
+- [ ] unplug with no client: teardown finishes in milliseconds on the hardening build (≤ ~7 s on older builds), no crash
 - [ ] `adb logcat -b crash -d` empty; no leaked usbfs fd after teardown
 - [ ] captures deleted from `/sdcard`

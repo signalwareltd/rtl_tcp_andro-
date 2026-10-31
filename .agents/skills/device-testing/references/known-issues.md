@@ -124,3 +124,28 @@ Workaround: back up the installed splits, uninstall, install the debug APK. Rest
   between phases.
 - `dev->rtl_dev` is read by TCP threads while the session is tearing down. Avoid sending commands
   exactly at close time.
+
+## 13. Android 9 has no `nc`
+
+Symptom: `adb shell '... | nc ...'` fails with `/system/bin/sh: nc: not found` on Android 9 and
+older. Toybox on those releases does not ship `nc`.
+
+Workaround: start the driver bound to the LAN (`iqsrc://-a 0.0.0.0 -p 1234 ...`) and run the
+client on the host against `<phone-ip>:1234`. This also makes stalled-client tests easy (connect
+from the host and never read). `adb forward` is not required.
+
+## 14. Huawei/EMUI freezes the app when the screen is off
+
+Symptom (Huawei P20, Android 9/EMUI 9): the session is listening and the kernel accepts TCP
+connections (they appear in the listen socket's accept queue), but the driver never logs
+`Client has connected` and sends no data. A second connection hangs because the backlog is full.
+`/proc/<pid>/task/*/wchan` shows the native threads in `__refrigerator` (cgroup freezer).
+
+Cause: EMUI's aggressive background management freezes the app even though it has a foreground
+service (and, in the observed case, a screen wake lock). The driver is not at fault.
+
+Workaround: keep the screen on during tests (`adb shell input keyevent KEYCODE_WAKEUP`, a long
+`screen_off_timeout`, or let SDR Touch keep the screen on while streaming) and whitelist the driver
+from battery optimisation (system battery-optimisation whitelist and, on EMUI, App launch -> Manage
+manually -> allow background activity). When the screen wakes, the frozen threads resume and the
+pending connection is handled.
