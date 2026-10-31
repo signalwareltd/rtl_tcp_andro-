@@ -44,6 +44,7 @@
 #define TWO_POW(n)		((double)(1ULL<<(n)))
 
 #include "rtl-sdr.h"
+#include "rtl-sdr-android.h"
 #include "tuner_e4k.h"
 #include "tuner_fc0012.h"
 #include "tuner_fc0013.h"
@@ -122,6 +123,11 @@ struct rtlsdr_dev {
 	int dev_lost;
 	int driver_active;
 	unsigned int xfer_errors;
+	/* Number of submitted transfers that have not delivered a completion
+	 * callback yet. Used to avoid freeing buffers libusb still owns. */
+	int xfer_outstanding;
+	/* Cancellation timed out; the async buffers were intentionally leaked. */
+	int xfer_leaked;
 	char manufact[256];
 	char product[256];
 	int force_bt;
@@ -1663,6 +1669,11 @@ err:
 	return r;
 }
 
+int rtlsdr_is_device_lost(rtlsdr_dev_t *dev)
+{
+	return dev ? dev->dev_lost : 1;
+}
+
 int rtlsdr_close(rtlsdr_dev_t *dev)
 {
 	if (!dev)
@@ -1724,11 +1735,28 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 {
 	rtlsdr_dev_t *dev = (rtlsdr_dev_t *)xfer->user_data;
 
+	/* This transfer has delivered its completion. It is only safe to free it
+	 * once every submitted transfer has done the same. */
+	if (dev->xfer_outstanding > 0)
+		dev->xfer_outstanding--;
+
 	if (LIBUSB_TRANSFER_COMPLETED == xfer->status) {
 		if (dev->cb)
 			dev->cb(xfer->buffer, xfer->actual_length, dev->cb_ctx);
 
-		libusb_submit_transfer(xfer); /* resubmit transfer */
+		/* If the device disappeared after this transfer completed, the
+		 * resubmit fails without invoking us again. Treat that as device
+		 * loss so rtlsdr_read_async() terminates instead of polling a
+		 * dead context forever. */
+		int resubmit_result = libusb_submit_transfer(xfer);
+		if (resubmit_result < 0) {
+			fprintf(stderr, "failed to resubmit transfer: %d, "
+				"canceling...\n", resubmit_result);
+			dev->dev_lost = 1;
+			rtlsdr_cancel_async(dev);
+		} else {
+			dev->xfer_outstanding++;
+		}
 		dev->xfer_errors = 0;
 	} else if (LIBUSB_TRANSFER_CANCELLED != xfer->status) {
 #ifndef _WIN32
@@ -1838,6 +1866,18 @@ static int _rtlsdr_free_async_buffers(rtlsdr_dev_t *dev)
 	if (!dev)
 		return -1;
 
+	if (dev->xfer_leaked) {
+		/* Some transfers never delivered their completion within the
+		 * timeout. libusb may still own them, so freeing them here would be
+		 * a use-after-free (the original crash). Leak the bookkeeping
+		 * instead: widgets are finite, a SIGSEGV is not recoverable. */
+		fprintf(stderr, "rtlsdr: leaking async buffers after an "
+			"incomplete cancellation\n");
+		dev->xfer = NULL;
+		dev->xfer_buf = NULL;
+		return 0;
+	}
+
 	if (dev->xfer) {
 		for(i = 0; i < dev->xfer_buf_num; ++i) {
 			if (dev->xfer[i]) {
@@ -1871,6 +1911,41 @@ static int _rtlsdr_free_async_buffers(rtlsdr_dev_t *dev)
 	return 0;
 }
 
+#define CANCEL_DRAIN_TIMEOUT_MS (2000)
+#define CANCEL_DRAIN_STEP_MS (100)
+
+/* After cancelling, keep handling events until every submitted transfer has
+ * invoked _libusb_callback(). libusb_cancel_transfer() can return
+ * LIBUSB_ERROR_NOT_FOUND while the transfer is still in flight, so the
+ * per-transfer status is not a reliable completion indicator. Freeing a
+ * transfer that libusb still owns corrupts its flying-transfer list and was
+ * the cause of the usbi_handle_transfer_completion() crash. */
+static void _rtlsdr_drain_async_transfers(rtlsdr_dev_t *dev)
+{
+	int elapsed = 0;
+
+	while (dev->xfer_outstanding > 0 && elapsed < CANCEL_DRAIN_TIMEOUT_MS) {
+		struct timeval tv = { 0, CANCEL_DRAIN_STEP_MS * 1000 };
+		unsigned int i;
+
+		for (i = 0; i < dev->xfer_buf_num; ++i) {
+			if (dev->xfer && dev->xfer[i] &&
+			    LIBUSB_TRANSFER_CANCELLED != dev->xfer[i]->status)
+				libusb_cancel_transfer(dev->xfer[i]);
+		}
+
+		libusb_handle_events_timeout_completed(dev->ctx, &tv, NULL);
+		elapsed += CANCEL_DRAIN_STEP_MS;
+	}
+
+	if (dev->xfer_outstanding > 0) {
+		fprintf(stderr, "rtlsdr: %d transfer(s) still in flight after "
+			"%d ms, leaking them to avoid a use-after-free\n",
+			dev->xfer_outstanding, elapsed);
+		dev->xfer_leaked = 1;
+	}
+}
+
 int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 			  uint32_t buf_num, uint32_t buf_len)
 {
@@ -1902,7 +1977,14 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 	else
 		dev->xfer_buf_len = DEFAULT_BUF_LENGTH;
 
-	_rtlsdr_alloc_async_buffers(dev);
+	dev->xfer_outstanding = 0;
+	dev->xfer_leaked = 0;
+
+	if (_rtlsdr_alloc_async_buffers(dev) < 0) {
+		fprintf(stderr, "Failed to allocate async buffers\n");
+		dev->async_status = RTLSDR_INACTIVE;
+		return -ENOMEM;
+	}
 
 	for(i = 0; i < dev->xfer_buf_num; ++i) {
 		libusb_fill_bulk_transfer(dev->xfer[i],
@@ -1925,6 +2007,7 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 			dev->async_status = RTLSDR_CANCELING;
 			break;
 		}
+		dev->xfer_outstanding++;
 	}
 
 	while (RTLSDR_INACTIVE != dev->async_status) {
@@ -1966,11 +2049,9 @@ int rtlsdr_read_async(rtlsdr_dev_t *dev, rtlsdr_read_async_cb_t cb, void *ctx,
 			}
 
 			if (dev->dev_lost || RTLSDR_INACTIVE == next_status) {
-				/* handle any events that still need to
-				 * be handled before exiting after we
-				 * just cancelled all transfers */
-				libusb_handle_events_timeout_completed(dev->ctx,
-								       &zerotv, NULL);
+				/* Do not free anything until every submitted transfer has
+				 * delivered its completion callback. */
+				_rtlsdr_drain_async_transfers(dev);
 				break;
 			}
 		}
@@ -2085,10 +2166,13 @@ int get_string_descriptor(int pos, uint8_t *data, char *str)
 int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	int r;
 	rtlsdr_dev_t *dev = NULL;
-	libusb_device *device = NULL;
 	uint8_t reg;
 	uint8_t buf[EEPROM_SIZE];
 	int pos;
+
+	/* The fd is already opened by Android's USB manager. The device path is
+	 * kept for API compatibility but is not needed by libusb anymore. */
+	(void) devicePath;
 
 	dev = malloc(sizeof(rtlsdr_dev_t));
 	if (NULL == dev)
@@ -2097,21 +2181,23 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 	memset(dev, 0, sizeof(rtlsdr_dev_t));
 	memcpy(dev->fir, fir_default, sizeof(fir_default));
 
-	int status = libusb_init(&dev->ctx);
+	/* On Android an unrooted app cannot enumerate USB devices. Skip device
+	 * discovery and wrap the fd the app already has permission for. */
+	struct libusb_init_option options[1];
+	options[0].option = LIBUSB_OPTION_NO_DEVICE_DISCOVERY;
+	options[0].value.ival = 1;
+
+	int status = libusb_init_context(&dev->ctx, options, 1);
 	if (status != LIBUSB_SUCCESS)
 		return status;
 	else if (dev->ctx == NULL)
 		return LIBUSB_ERROR_OTHER;
 
 	dev->dev_lost = 1;
-	device = libusb_get_device2(dev->ctx, devicePath);
 
-	if (!device) {
-		r = -1;
+	r = libusb_wrap_sys_device(dev->ctx, (intptr_t) fd, &dev->devh);
+	if (r < 0)
 		goto err;
-	}
-
-	r = libusb_open2(device, &dev->devh, fd);
 
 	if (libusb_kernel_driver_active(dev->devh, 0) == 1) {
 		dev->driver_active = 1;

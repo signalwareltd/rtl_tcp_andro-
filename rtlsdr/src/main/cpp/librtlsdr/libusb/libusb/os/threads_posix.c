@@ -19,64 +19,108 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <config.h>
+#include "libusbi.h"
 
-#if defined(__linux__) || defined(__OpenBSD__)
-# if defined(__OpenBSD__)
-#  define _BSD_SOURCE
-# endif
+#include <errno.h>
+#include <limits.h>
+#if defined(__ANDROID__)
 # include <unistd.h>
+#elif defined(__HAIKU__)
+# include <os/kernel/OS.h>
+#elif defined(__linux__)
 # include <sys/syscall.h>
-#elif defined(__APPLE__)
-# include <mach/mach.h>
-#elif defined(__CYGWIN__)
-# include <windows.h>
+# include <unistd.h>
+#elif defined(__NetBSD__)
+# include <lwp.h>
+#elif defined(__OpenBSD__)
+# include <unistd.h>
+#elif defined(__sun__)
+# include <sys/lwp.h>
 #endif
 
-#include "threads_posix.h"
-
-int usbi_mutex_init_recursive(pthread_mutex_t *mutex, pthread_mutexattr_t *attr)
+void usbi_cond_init(usbi_cond_t *cond)
 {
-	int err;
-	pthread_mutexattr_t stack_attr;
-	if (!attr) {
-		attr = &stack_attr;
-		err = pthread_mutexattr_init(&stack_attr);
-		if (err != 0)
-			return err;
-	}
+#ifdef HAVE_PTHREAD_CONDATTR_SETCLOCK
+	pthread_condattr_t condattr;
 
-	/* mutexattr_settype requires _GNU_SOURCE or _XOPEN_SOURCE >= 500 on Linux */
-	err = pthread_mutexattr_settype(attr, PTHREAD_MUTEX_RECURSIVE);
-	if (err != 0)
-		goto finish;
-
-	err = pthread_mutex_init(mutex, attr);
-
-finish:
-	if (attr == &stack_attr)
-		pthread_mutexattr_destroy(&stack_attr);
-
-	return err;
+	PTHREAD_CHECK(pthread_condattr_init(&condattr));
+	PTHREAD_CHECK(pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC));
+	PTHREAD_CHECK(pthread_cond_init(cond, &condattr));
+	PTHREAD_CHECK(pthread_condattr_destroy(&condattr));
+#else
+	PTHREAD_CHECK(pthread_cond_init(cond, NULL));
+#endif
 }
 
-int usbi_get_tid(void)
+int usbi_cond_timedwait(usbi_cond_t *cond,
+	usbi_mutex_t *mutex, const struct timeval *tv)
 {
-	int ret = -1;
-#if defined(__ANDROID__)
-	ret = gettid();
-#elif defined(__linux__)
-	ret = syscall(SYS_gettid);
-#elif defined(__OpenBSD__)
-	/* The following only works with OpenBSD > 5.1 as it requires
-	   real thread support. For 5.1 and earlier, -1 is returned. */
-	ret = syscall(SYS_getthrid);
-#elif defined(__APPLE__)
-	ret = mach_thread_self();
-	mach_port_deallocate(mach_task_self(), ret);
-#elif defined(__CYGWIN__)
-	ret = GetCurrentThreadId();
+	struct timespec timeout;
+	int r;
+
+#ifdef HAVE_PTHREAD_CONDATTR_SETCLOCK
+	usbi_get_monotonic_time(&timeout);
+#else
+	usbi_get_real_time(&timeout);
 #endif
-/* TODO: NetBSD thread ID support */
-	return ret;
+
+	timeout.tv_sec += tv->tv_sec;
+	timeout.tv_nsec += tv->tv_usec * 1000L;
+	if (timeout.tv_nsec >= NSEC_PER_SEC) {
+		timeout.tv_nsec -= NSEC_PER_SEC;
+		timeout.tv_sec++;
+	}
+
+	r = pthread_cond_timedwait(cond, mutex, &timeout);
+	if (r == 0)
+		return 0;
+	else if (r == ETIMEDOUT)
+		return LIBUSB_ERROR_TIMEOUT;
+	else
+		return LIBUSB_ERROR_OTHER;
+}
+
+unsigned long usbi_get_tid(void)
+{
+	static _Thread_local unsigned long tl_tid;
+	unsigned long tid;
+
+	if (tl_tid)
+		return tl_tid;
+
+#if defined(__ANDROID__)
+	tid = (unsigned long)gettid();
+#elif defined(__APPLE__)
+#ifdef HAVE_PTHREAD_THREADID_NP
+	uint64_t thread_id;
+
+	if (pthread_threadid_np(NULL, &thread_id) == 0)
+		tid = (unsigned long)thread_id;
+	else
+		tid = ULONG_MAX;
+#else
+	tid = (unsigned long)pthread_mach_thread_np(pthread_self());
+#endif
+#elif defined(__HAIKU__)
+	tid = (unsigned long)get_pthread_thread_id(pthread_self());
+#elif defined(__linux__)
+	tid = (unsigned long)syscall(SYS_gettid);
+#elif defined(__NetBSD__)
+	tid = (unsigned long)_lwp_self();
+#elif defined(__OpenBSD__)
+	tid = (unsigned long)getthrid();
+#elif defined(__sun__)
+	tid = (unsigned long)_lwp_self();
+#else
+	tid = ULONG_MAX;
+#endif
+
+	if (tid == ULONG_MAX) {
+		/* If we don't have a thread ID, at least return a unique
+		 * value that can be used to distinguish individual
+		 * threads. */
+		tid = (unsigned long)(uintptr_t)pthread_self();
+	}
+
+	return tl_tid = tid;
 }

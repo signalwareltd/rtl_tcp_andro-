@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <string.h>
 #include <errno.h>
 
@@ -28,8 +29,6 @@
 #include "sdrtcp.h"
 #include "common.h"
 #include "extbuffer.h"
-
-#define FEED_SLEEP_IF_NOT_READY_MILLIS (500)
 
 #define POOL_MAX_ELEMENTS (5)
 
@@ -43,7 +42,6 @@
 
 #define RETURN_FAILURE { sdrtcp_cleanup(obj); return 0; }
 #define RETURN_SUCCESS { return 1; }
-#define RETURN_AND_CLOSE { sdrtcp_cleanup(obj); return; }
 
 typedef struct {
     char magic[4];
@@ -54,13 +52,20 @@ typedef struct {
 static void sdrtcp_cleanup(sdrtcp_t * obj) {
     pthread_mutex_lock(&obj->state_locker);
     if (obj->state != STAGE_UNINITIALIZED) {
+        LOGI("SdrTcp: Closing from state %d", obj->state);
         obj->state = STAGE_UNINITIALIZED;
 
-        LOGI("SdrTcp: Closing from state %d", obj->state);
-
         pool_free(&obj->workpool);
-        if (obj->state != STAGE_INITIALIZED && obj->listen_socket != -1) {
+
+        if (obj->listen_socket != -1) {
             close(obj->listen_socket);
+        }
+
+        if (obj->client_socket != -1) {
+            /* Leaving the accepted socket open keeps the peer in CLOSE_WAIT and
+             * can eventually wedge the listener (listen backlog is 1). */
+            shutdown(obj->client_socket, SHUT_RDWR);
+            close(obj->client_socket);
         }
 
         obj->client_socket = -1;
@@ -88,15 +93,30 @@ static void commandListener(void *arg) {
 
             if (obj->state == STAGE_CLIENT_SERVING) r = select(obj->client_socket + 1, &readfds, NULL, NULL, &tv);
 
-            if (obj->state == STAGE_CLIENT_SERVING && r) {
-                ssize_t received = recv(obj->client_socket, (char *) &cmd + (sizeof(cmd) - left), left, 0);
-                left -= received;
+            if (obj->state != STAGE_CLIENT_SERVING) {
+                break;
+            }
 
-                if (received == -1) {
+            if (r > 0) {
+                ssize_t received = recv(obj->client_socket, (char *) &cmd + (sizeof(cmd) - left), left, 0);
+
+                if (received == 0) {
+                    /* The client closed its end of the connection. */
+                    LOGI("SdrTcp: commandListener: client closed the connection");
+                    obj->state = STAGE_NEEDS_STOPPING;
+                    break;
+                } else if (received < 0) {
+                    if (errno == EINTR) continue;
                     LOGI("SdrTcp: commandListener failed to receive command");
                     obj->state = STAGE_NEEDS_STOPPING;
                     break;
                 }
+
+                left -= (size_t) received;
+            } else if (r < 0 && errno != EINTR) {
+                LOGI("SdrTcp: commandListener select failed. Code %d", errno);
+                obj->state = STAGE_NEEDS_STOPPING;
+                break;
             }
         }
 
@@ -142,23 +162,28 @@ static void serveClient(sdrtcp_t * obj) {
             if (obj->state == STAGE_CLIENT_SERVING) {
                 r = select(obj->client_socket + 1, NULL, &writefds, NULL, &tv);
                 if (r == -1) {
-                    int err = errno;
-                    char *str_error = strerror(errno);
-                    LOGI("SdrTcp: serveClient cannot select. Code %d, exception %s", err,
-                         str_error);
-                    obj->state = STAGE_NEEDS_STOPPING;
+                    if (errno != EINTR) {
+                        int err = errno;
+                        char *str_error = strerror(errno);
+                        LOGI("SdrTcp: serveClient cannot select. Code %d, exception %s", err,
+                             str_error);
+                        obj->state = STAGE_NEEDS_STOPPING;
+                    }
+                    continue;
                 }
                 if (r && obj->state == STAGE_CLIENT_SERVING) {
                     bytessent = send(obj->client_socket, data_to_send + index, bytesleft, 0);
-                    bytesleft -= bytessent;
-                    index += bytessent;
 
-                    if (bytessent == -1 && obj->state == STAGE_CLIENT_SERVING) {
+                    if (bytessent < 0) {
+                        if (errno == EINTR) continue;
                         int err = errno;
                         char *str_error = strerror(errno);
                         LOGI("SdrTcp: serveClient cannot send to client. Code %d, exception %s",
                              err, str_error);
                         obj->state = STAGE_NEEDS_STOPPING;
+                    } else {
+                        bytesleft -= (size_t) bytessent;
+                        index += (size_t) bytessent;
                     }
                 }
             }
@@ -193,7 +218,18 @@ static void sdrtcp_wait_for_client(sdrtcp_t * obj) {
             socklen_t rlen = sizeof(remote);
             obj->client_socket = accept(obj->listen_socket, (struct sockaddr *) &remote, &rlen);
             if (obj->client_socket != -1) {
-                obj->state = STAGE_CLIENT_OPEN;
+                /* A stop may have been requested while accept() was running.
+                 * Do not resurrect the session in that case: close the freshly
+                 * accepted client and let tcp_server shut down. */
+                pthread_mutex_lock(&obj->state_locker);
+                if (obj->state == STAGE_CLIENT_OPEN_STARTED_ASYNC) {
+                    obj->state = STAGE_CLIENT_OPEN;
+                } else {
+                    shutdown(obj->client_socket, SHUT_RDWR);
+                    close(obj->client_socket);
+                    obj->client_socket = -1;
+                }
+                pthread_mutex_unlock(&obj->state_locker);
             } else {
                 LOGI("SdrTcp: Failed to talk to client");
                 failure = 1;
@@ -210,24 +246,43 @@ static void tcp_server(void *arg) {
     LOGI("SdrTcp: Waiting for client...");
     sdrtcp_wait_for_client(obj);
 
+    int serving = 0;
+    pthread_mutex_lock(&obj->state_locker);
     if (obj->state == STAGE_CLIENT_OPEN) {
+        /* The state must be set before the command listener is created: the
+         * listener exits immediately if it observes any other state. */
+        obj->state = STAGE_CLIENT_SERVING;
+        serving = 1;
+    }
+    pthread_mutex_unlock(&obj->state_locker);
+
+    if (serving) {
         LOGI("SdrTcp: TCP server succesfully started and listening for clients!");
         pthread_t commandThread;
+        int command_thread_started = 0;
 
         pthread_attr_t attrs;
         pthread_attr_init(&attrs);
         pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_JOINABLE);
-        pthread_create(&commandThread, &attrs, (void *) commandListener, (void *) obj);
+        int create_result = pthread_create(&commandThread, &attrs, (void *) commandListener, (void *) obj);
+        pthread_attr_destroy(&attrs);
 
-        pthread_mutex_lock(&obj->state_locker);
-        obj->state = STAGE_CLIENT_SERVING;
-        pthread_mutex_unlock(&obj->state_locker);
+        if (create_result == 0) {
+            command_thread_started = 1;
+        } else {
+            LOGI("SdrTcp: Failed to start command listener. Code %d", create_result);
+            pthread_mutex_lock(&obj->state_locker);
+            obj->state = STAGE_NEEDS_STOPPING;
+            pthread_mutex_unlock(&obj->state_locker);
+        }
 
         serveClient(obj);
 
-        LOGI("SdrTcp: Waiting for command thread to die");
-        void *status;
-        pthread_join(commandThread, &status);
+        if (command_thread_started) {
+            LOGI("SdrTcp: Waiting for command thread to die");
+            void *status;
+            pthread_join(commandThread, &status);
+        }
     }
 
     LOGI("SdrTcp: TCP server shutting down.");
@@ -241,6 +296,13 @@ static void tcp_server(void *arg) {
     }
 
     obj->closedcb(obj, obj->ctx);
+
+    /* Everything this thread owns is now released. Let sdrtcp_wait_closed()/
+     * sdrtcp_free() know that it is safe to free the session. */
+    pthread_mutex_lock(&obj->state_locker);
+    obj->worker_thread_done = 1;
+    pthread_cond_broadcast(&obj->worker_finished);
+    pthread_mutex_unlock(&obj->state_locker);
 
     LOGI("SdrTcp: Server thread shut down");
     pthread_exit(NULL);
@@ -272,6 +334,9 @@ int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port, const cha
         pool_get_unlock(&obj->workpool, 0, buff);
     }
 
+    /* A brand new session does not have a server thread yet. */
+    obj->worker_thread_valid = 0;
+    obj->worker_thread_done = 1;
     obj->state = STAGE_INITIALIZED;
     pthread_mutex_unlock(&obj->state_locker);
 
@@ -312,17 +377,13 @@ int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port, const cha
     }
 }
 
-void sdrtcp_serve_client_async(sdrtcp_t * obj, void * ctx, sdrtcp_command_callback commandcb, sdrtcp_closed_callback closedcb) {
+int sdrtcp_serve_client_async(sdrtcp_t * obj, void * ctx, sdrtcp_command_callback commandcb, sdrtcp_closed_callback closedcb) {
     if (obj->state != STAGE_SOCKET_OPEN) {
         LOGI("SdrTcp: Wrong state when calling sdrtcp_serve_client_async. State is %d", obj->state);
         closedcb(obj, ctx);
-        RETURN_AND_CLOSE;
+        sdrtcp_cleanup(obj);
+        return 0;
     }
-
-    // async start is imminent
-    obj->state = STAGE_CLIENT_OPEN_STARTED_ASYNC;
-
-    pthread_t worker_thread;
 
     obj->closedcb = closedcb;
     obj->commandcb = commandcb;
@@ -331,23 +392,63 @@ void sdrtcp_serve_client_async(sdrtcp_t * obj, void * ctx, sdrtcp_command_callba
     pthread_attr_t attrs;
     pthread_attr_init(&attrs);
     pthread_attr_setdetachstate(&attrs, PTHREAD_CREATE_JOINABLE);
-    pthread_create(&worker_thread, &attrs, (void *) tcp_server, (void *) obj);
+
+    pthread_mutex_lock(&obj->state_locker);
+    // async start is imminent
+    obj->state = STAGE_CLIENT_OPEN_STARTED_ASYNC;
+    obj->worker_thread_valid = 0;
+    obj->worker_thread_done = 0;
+
+    int create_result = pthread_create(&obj->worker_thread, &attrs, (void *) tcp_server, (void *) obj);
+    if (create_result == 0) {
+        obj->worker_thread_valid = 1;
+    } else {
+        obj->worker_thread_done = 1;
+    }
+    pthread_mutex_unlock(&obj->state_locker);
+
+    pthread_attr_destroy(&attrs);
+
+    if (create_result != 0) {
+        LOGI("SdrTcp: Failed to create server thread. Code %d", create_result);
+        sdrtcp_cleanup(obj);
+        closedcb(obj, ctx);
+        return 0;
+    }
+
+    return 1;
 }
 
 void sdrtcp_stop_serving_client(sdrtcp_t * obj) {
+    pthread_mutex_lock(&obj->state_locker);
 
     if (obj->state == STAGE_UNINITIALIZED) {
+        pthread_mutex_unlock(&obj->state_locker);
         LOGI("SdrTcp: Requested sdrtcp stop but already stopped");
         return;
     }
 
-    if (obj->state < STAGE_CLIENT_OPEN_STARTED_ASYNC) {
+    if (!obj->worker_thread_valid) {
+        /* No server thread owns the sockets yet, so it is safe to clean up
+         * right here. */
+        pthread_mutex_unlock(&obj->state_locker);
         LOGI("SdrTcp: Requested sdrtcp stop and stopping now");
         sdrtcp_cleanup(obj);
     } else {
-        LOGI("SdrTcp: Requested sdrtcp stop asynchroneously");
+        /* The server thread owns the sockets and the work pool. It will clean
+         * everything up and call closedcb before sdrtcp_wait_closed returns. */
         obj->state = STAGE_NEEDS_STOPPING;
+        pthread_mutex_unlock(&obj->state_locker);
+        LOGI("SdrTcp: Requested sdrtcp stop asynchroneously");
     }
+}
+
+void sdrtcp_wait_closed(sdrtcp_t * obj) {
+    pthread_mutex_lock(&obj->state_locker);
+    while (obj->worker_thread_valid && !obj->worker_thread_done) {
+        pthread_cond_wait(&obj->worker_finished, &obj->state_locker);
+    }
+    pthread_mutex_unlock(&obj->state_locker);
 }
 
 // queue up data to send over the connection
@@ -355,36 +456,39 @@ int sdrtcp_feed(sdrtcp_t * obj, unsigned char  * buf, uint32_t len) {
     extbuffer_t * buff = NULL;
     int succesful = 0;
 
+    /* Do not sleep or block here: this runs on the driver's receive thread
+     * (inside the libusb callback), so waiting while no client is connected
+     * delays disconnect handling and every other event. Drop the buffer
+     * instead. */
+    pthread_mutex_lock(&obj->state_locker);
     if (obj->state == STAGE_CLIENT_SERVING) {
-        pthread_mutex_lock(&obj->state_locker);
-        if (obj->state == STAGE_CLIENT_SERVING) {
-            if ((buff = pool_get_wait_lock(&obj->workpool, 0, 1)) != NULL) {
-                extbuffer_preparetohandle(buff, len);
-                memcpy((void *) buff->ushortbuffer, (void *) buf,
-                       sizeof(uint16_t) * len);
-                pool_get_unlock(&obj->workpool, 0, buff);
-            }
-            succesful = 1;
-        } else if (obj->state == STAGE_SOCKET_OPEN || obj->state == STAGE_CLIENT_OPEN || obj->state == STAGE_CLIENT_OPEN_STARTED_ASYNC) {
-            usleep(FEED_SLEEP_IF_NOT_READY_MILLIS * 1000);
-            succesful = 2; // no client to send data to
+        if ((buff = pool_get_wait_lock(&obj->workpool, 0, 1)) != NULL) {
+            extbuffer_preparetohandle(buff, len);
+            memcpy((void *) buff->ushortbuffer, (void *) buf,
+                   sizeof(uint16_t) * len);
+            pool_get_unlock(&obj->workpool, 0, buff);
         }
-        pthread_mutex_unlock(&obj->state_locker);
-    } else if (obj->state == STAGE_SOCKET_OPEN || obj->state == STAGE_CLIENT_OPEN || obj->state == STAGE_CLIENT_OPEN_STARTED_ASYNC) {
-        usleep(FEED_SLEEP_IF_NOT_READY_MILLIS * 1000);
-        succesful = 2; // no client to send data to
+        succesful = 1;
     }
+    pthread_mutex_unlock(&obj->state_locker);
 
     return succesful;
 }
 
 void sdrtcp_init(sdrtcp_t * obj) {
-    obj->state = 0;
+    obj->state = STAGE_UNINITIALIZED;
     pthread_mutex_init(&obj->state_locker, NULL);
+    pthread_cond_init(&obj->worker_finished, NULL);
     obj->client_socket = -1;
     obj->listen_socket = -1;
+    obj->worker_thread_valid = 0;
+    obj->worker_thread_done = 1;
 }
 
 void sdrtcp_free(sdrtcp_t * obj) {
+    /* Never destroy the lock or the condition variable while the server
+     * thread (or something called from it) may still be using them. */
+    sdrtcp_wait_closed(obj);
+    pthread_cond_destroy(&obj->worker_finished);
     pthread_mutex_destroy(&obj->state_locker);
 }

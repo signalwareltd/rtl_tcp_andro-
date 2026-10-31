@@ -78,20 +78,19 @@ Added features:
  Removed features:
  - Ability to automatically open a device in JNI (without first opening it via the Android USB API)
 
-Files modified in libusb-1.0 to create libusb-andro: 
- core.c, libusb.h and libusbi.h - to header for and implementation of the open2 function which takes an already open file descriptor 
- linux_usbfs.c - to create a libusb handle from the fd 
+libusb is vendored unmodified at version 1.0.30 (see
+[rtlsdr/src/main/cpp/librtlsdr/libusb/UPSTREAM.md](rtlsdr/src/main/cpp/librtlsdr/libusb/UPSTREAM.md)).
+Android file descriptors are opened with the upstream `libusb_wrap_sys_device()` API after
+initializing a context with `LIBUSB_OPTION_NO_DEVICE_DISCOVERY`. The Java layer owns and closes
+the `UsbDeviceConnection` after the native session ends.
 
-The modifications are released under GNU. See [COPYING](/COPYING) for details. 
+The modifications are released under GNU. See [COPYING](/COPYING) for details.
  
 For more information on rtl-sdr: 
 http://sdr.osmocom.org/trac/wiki/rtl-sdr 
  
 For more information on libusb: 
 http://www.libusb.org/wiki/libusb-1.0
-
-Based on modifications on libusb:
-https://github.com/kuldeepdhaka/libusb
 
 Hack RF support is based on Dennis Mantz's HackRF for Android:
 https://github.com/demantz/hackrf_android

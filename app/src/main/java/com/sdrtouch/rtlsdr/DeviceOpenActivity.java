@@ -63,6 +63,9 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	private volatile SdrServiceConnection mConnection;
 	private boolean notificationPermissionRequested;
 
+	private final Object sessionStartLock = new Object();
+	private boolean sessionStartRequested;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -167,6 +170,16 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	 * Starts the tcp binary
 	 */
 	public void startServer(final SdrDevice sdrDevice) {
+		synchronized (sessionStartLock) {
+			// onStart() runs again when the USB permission dialog closes. Without
+			// this guard that starts a second session for the same device, and the
+			// second openAsync fails with LIBUSB_ERROR_BUSY.
+			if (sessionStartRequested) {
+				Log.appendLine("Ignoring duplicate start request for %s", sdrDevice.getName());
+				return;
+			}
+			sessionStartRequested = true;
+		}
 		try {
 			requestNotificationPermissionIfNeeded();
 			//start the service

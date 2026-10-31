@@ -30,11 +30,10 @@ import com.sdrtouch.core.exceptions.SdrException;
 import com.sdrtouch.tools.Log;
 import com.sdrtouch.tools.UsbPermissionObtainer;
 
-import java.util.concurrent.ExecutionException;
-
 public class RtlSdrDevice extends SdrDevice {
     private final UsbDevice usbDevice;
     private final long nativeHandler;
+    private volatile boolean closeRequested;
 
 
     public RtlSdrDevice(Context context, UsbDevice usbDevice) {
@@ -48,37 +47,46 @@ public class RtlSdrDevice extends SdrDevice {
         new Thread() {
             @Override
             public void run() {
+                UsbDeviceConnection connection = null;
+                Throwable error = null;
                 try {
-                    int fd = openSessionAndGetFd();
-                    String path = usbDevice.getDeviceName();
-                    if (!openAsync(nativeHandler, fd, sdrTcpArguments.getGain(), sdrTcpArguments.getSamplerateHz(), sdrTcpArguments.getFrequencyHz(), sdrTcpArguments.getPort(), sdrTcpArguments.getPpm(), sdrTcpArguments.getBiasT(),sdrTcpArguments.getAddress(), path)) {
-                        announceOnClosed(new SdrException(SdrException.EXIT_UNKNOWN));
+                    connection = UsbPermissionObtainer.obtainFdFor(context, usbDevice).get();
+                    if (connection == null) throw new RuntimeException("Could not get a connection");
+                    if (closeRequested) {
+                        // close() was called while the USB permission dialog was
+                        // showing; do not open a session that nobody waits for.
+                        Log.appendLine("Close was requested before the session started");
                     } else {
-                        announceOnClosed(null);
+                        int fd = connection.getFileDescriptor();
+                        Log.appendLine("Opening fd " + fd);
+                        String path = usbDevice.getDeviceName();
+                        if (!openAsync(nativeHandler, fd, sdrTcpArguments.getGain(), sdrTcpArguments.getSamplerateHz(), sdrTcpArguments.getFrequencyHz(), sdrTcpArguments.getPort(), sdrTcpArguments.getPpm(), sdrTcpArguments.getBiasT(),sdrTcpArguments.getAddress(), path)) {
+                            error = new SdrException(SdrException.EXIT_UNKNOWN);
+                        }
                     }
                 } catch (Throwable e) {
-                    announceOnClosed(e);
+                    error = e;
+                } finally {
+                    // libusb_wrap_sys_device() does not own the fd. Close it before
+                    // listeners may start a new session on the same USB device.
+                    if (connection != null) {
+                        connection.close();
+                    }
                 }
+                announceOnClosed(error);
             }
         }.start();
     }
 
     @Override
     public void close() {
+        closeRequested = true;
         close(nativeHandler);
     }
 
     @Override
     public String getName() {
         return "rtl-sdr "+usbDevice.getDeviceName();
-    }
-
-    private int openSessionAndGetFd() throws ExecutionException, InterruptedException {
-        UsbDeviceConnection deviceConnection = UsbPermissionObtainer.obtainFdFor(context, usbDevice).get();
-        if (deviceConnection == null) throw new RuntimeException("Could not get a connection");
-        int fd = deviceConnection.getFileDescriptor();
-        Log.appendLine("Opening fd "+fd);
-        return fd;
     }
 
     @Override

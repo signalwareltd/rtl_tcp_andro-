@@ -31,4 +31,7 @@ extern "C" {
 
 RTLSDR_API int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath);
 
+/* True if the device was lost (unplugged or the USB transfer path failed). */
+RTLSDR_API int rtlsdr_is_device_lost(rtlsdr_dev_t *dev);
+
 #endif /* __RTL_ANDRO_SDR_H */

@@ -61,6 +61,8 @@ public class BinaryRunnerService extends Service {
 
 	private final IBinder mBinder = new LocalBinder();
 	private boolean isRunning = false;
+	/** An openAsync() is in progress or a session is running. Guarded by this. */
+	private boolean sessionActive = false;
 	private SdrDevice thisSdrDevice = null;
 	private final Set<StatusCallback> statusCallbacks = new HashSet<>();
 	private final Queue<Pair<SdrDevice, SdrTcpArguments>> workQueue = new LinkedList<>();
@@ -83,14 +85,29 @@ public class BinaryRunnerService extends Service {
 		}
 	}
 
-	private void startWithDevice() {
+	/**
+	 * Starts the next queued session. Synchronized so that onStartCommand(), the
+	 * binder callback and onClosed() cannot start two sessions at once (which
+	 * used to fail with LIBUSB_ERROR_BUSY).
+	 */
+	private synchronized void startWithDevice() {
+		if (sessionActive) {
+			// The queued session must wait until the active one has fully
+			// closed; starting it now would open the device a second time
+			// while the previous session still holds it (LIBUSB_ERROR_BUSY).
+			Log.appendLine("A session is already starting or running; deferring queued sessions");
+			return;
+		}
+
 		Pair<SdrDevice, SdrTcpArguments> pair;
 		synchronized (workQueue) {
 			pair = workQueue.poll();
 		}
 		if (pair == null) {
 			announceNotRunning();
-			statusCallbacks.clear();
+			synchronized (statusCallbacks) {
+				statusCallbacks.clear();
+			}
 			stopSelf();
 		} else {
 			if (isRunning) Log.appendLine("Restarting");
@@ -100,6 +117,7 @@ public class BinaryRunnerService extends Service {
 
 			Check.isNotNull(thisSdrDevice);
 			Check.isNotNull(sdrTcpArguments);
+			sessionActive = true;
 			announceRunning(thisSdrDevice);
 			thisSdrDevice.addOnStatusListener(onStatusListener);
 			thisSdrDevice.openAsync(sdrTcpArguments);
@@ -149,29 +167,35 @@ public class BinaryRunnerService extends Service {
 
 		@Override
 		public void onClosed(Throwable e) {
-			if (e == null) {
-				Log.appendLine("Successfully closed service");
-			} else {
-				Log.appendLine("Closed service due to exception " + e.getClass().getSimpleName() + ": " + e.getMessage());
-			}
-
-			Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
-			if (thisSdrDevice != null) {
-				bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
-			}
-			sendBroadcast(bIntent);
-
-			stopForeground(true);
-			thisSdrDevice = null;
-
-			try {
-				if (wl != null) {
-					wl.release();
-					Log.appendLine("Wake lock released");
+			// Called from the device's worker thread. Serialize with the binder
+			// and onStartCommand paths: only one session may be started at a time,
+			// and the next one must start only after this one has fully closed.
+			synchronized (BinaryRunnerService.this) {
+				if (e == null) {
+					Log.appendLine("Successfully closed service");
+				} else {
+					Log.appendLine("Closed service due to exception " + e.getClass().getSimpleName() + ": " + e.getMessage());
 				}
-			} catch (Throwable ignored) {}
 
-			startWithDevice();
+				Intent bIntent = new Intent(ACTION_SDR_DEVICE_DETACHED);
+				if (thisSdrDevice != null) {
+					bIntent.putExtra(EXTRA_DEVICE_NAME, thisSdrDevice.getName());
+				}
+				sendBroadcast(bIntent);
+
+				stopForeground(true);
+				thisSdrDevice = null;
+				sessionActive = false;
+
+				try {
+					if (wl != null) {
+						wl.release();
+						Log.appendLine("Wake lock released");
+					}
+				} catch (Throwable ignored) {}
+
+				startWithDevice();
+			}
 		}
 	};
 
@@ -189,14 +213,14 @@ public class BinaryRunnerService extends Service {
 		} catch (Throwable e) {e.printStackTrace();}
 	}
 
-	public void closeService() {
-		if (isRunning) {
+	public synchronized void closeService() {
+		if (isRunning && thisSdrDevice != null) {
 			Log.appendLine("Closing device");
 			thisSdrDevice.close();
 		}
 	}
 
-	public boolean isRunning() {
+	public synchronized boolean isRunning() {
 		return isRunning;
 	}
 
@@ -232,16 +256,18 @@ public class BinaryRunnerService extends Service {
 		public void startWithDevice(SdrDevice sdrDevice, SdrTcpArguments sdrTcpArguments) {
 			Check.isNotNull(sdrDevice);
 			Check.isNotNull(sdrTcpArguments);
-			addWork(sdrDevice, sdrTcpArguments);
-			if (!isRunning) {
-				Intent intent = new Intent(getApplicationContext(), BinaryRunnerService.class);
-				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-					startForegroundService(intent);
+			synchronized (BinaryRunnerService.this) {
+				addWork(sdrDevice, sdrTcpArguments);
+				if (!isRunning) {
+					Intent intent = new Intent(getApplicationContext(), BinaryRunnerService.class);
+					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+						startForegroundService(intent);
+					} else {
+						startService(intent);
+					}
 				} else {
-					startService(intent);
+					closeService();
 				}
-			} else {
-				closeService();
 			}
 		}
 	}

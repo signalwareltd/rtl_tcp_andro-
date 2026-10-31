@@ -40,6 +40,7 @@ typedef void (*sdrtcp_closed_callback)(sdrtcp_t *, void * ctx);
 struct sdrtcp {
     volatile int state;
     pthread_mutex_t state_locker;
+    pthread_cond_t worker_finished;
     workpool_t workpool;
 
     sdrtcp_closed_callback closedcb;
@@ -48,6 +49,12 @@ struct sdrtcp {
 
     volatile int client_socket;
     volatile int listen_socket;
+
+    // The server thread owns the sockets and the work pool once it has been
+    // started. sdrtcp_wait_closed() must be called before sdrtcp_free().
+    pthread_t worker_thread;
+    int worker_thread_valid;
+    int worker_thread_done;
 };
 
 void sdrtcp_init(sdrtcp_t * obj);
@@ -61,10 +68,17 @@ int sdrtcp_open_socket(sdrtcp_t * obj, const char * address, int port, const cha
 // Starts waiting for and feeding a client asynchroneously
 // if a command is received command cb will be called (guaranteed in a separate thread). This callback can be called after sdrtcp_stop_serving_client!!!
 // if for any reason the server stops, closedcb will be called (in a separate thread unless a config error)
-void sdrtcp_serve_client_async(sdrtcp_t * obj, void * ctx, sdrtcp_command_callback commandcb, sdrtcp_closed_callback closedcb);
+// returns 1 if the server thread was started, 0 otherwise (closedcb is still called)
+int sdrtcp_serve_client_async(sdrtcp_t * obj, void * ctx, sdrtcp_command_callback commandcb, sdrtcp_closed_callback closedcb);
 
-// doesn't block
+// doesn't block. The server thread cleans up on its own and calls closedcb.
 void sdrtcp_stop_serving_client(sdrtcp_t * obj);
+
+// Blocks until the server thread has fully exited (closedcb has returned and no
+// thread touches the work pool or sockets any more). Returns immediately if no
+// server thread was ever started or it has already finished. Must be called
+// before sdrtcp_free() so the native session can be freed safely.
+void sdrtcp_wait_closed(sdrtcp_t * obj);
 
 // queue up data to send over the connection
 // return 0 if there was an error and this function should not be called anymore until another sdrtcp_open_socket

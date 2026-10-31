@@ -126,10 +126,11 @@ adb shell input tap <x> <y>
 `adb shell dumpsys window | grep mCurrentFocus` confirms the dialog is focused. The dialog may also
 offer an "Always open ... when connected" checkbox; not required.
 
-Gotcha: dismissing the dialog resumes `DeviceOpenActivity`, whose `onStart` starts a **second**
-session. The first claim can then fail with `usb_claim_interface error -6` (`LIBUSB_ERROR_BUSY`) and
-`Closed service due to exception ... LIBUSB_ERROR_BUSY`. The second session usually survives, but
-the app is left with a stale duplicate. After granting permission, force-stop and relaunch cleanly:
+Gotcha (fixed by the Phase 2 lifecycle fixes on the `libusb-1.0.30-upgrade` branch): dismissing
+the dialog used to resume `DeviceOpenActivity`, whose `onStart` started a **second** session; the
+first claim then failed with `usb_claim_interface error -6` (`LIBUSB_ERROR_BUSY`). The activity and
+service now serialize session starts, so only one session opens. Older builds need a force-stop
+and relaunch after granting permission:
 
 ```sh
 adb shell am force-stop marto.rtl_tcp_andro
@@ -200,8 +201,9 @@ it:
 # SET_FREQ 101000000 (0x06053180), then SET_SAMPLE_RATE 1024000 (0x000FA000)
 printf '\x01\x06\x05\x31\x80\x02\x00\x0f\xa0\x00' > /tmp/cmds.bin
 adb push /tmp/cmds.bin /data/local/tmp/cmds.bin
-# Keep the connection open briefly; commands sent immediately can be missed (see known issues)
-adb shell '(sleep 1; cat /data/local/tmp/cmds.bin; sleep 3) | nc -W 3 127.0.0.1 1234 > /dev/null'
+# Commands sent immediately after connect are applied on the Phase 2 branch; older builds
+# may need a ~1 s delay (see known issues).
+adb shell '(cat /data/local/tmp/cmds.bin; sleep 3) | nc -W 3 127.0.0.1 1234 > /dev/null'
 
 # Clean close
 printf '\x7e\x00\x00\x00\x00' > /tmp/exit.bin
@@ -225,10 +227,11 @@ manually, and test two variants:
    unplug for ~5 s. Expect fast teardown: `rtlsdr_read_async failed: -5`, sdrtcp stop, server
    thread exits, client connection resets, fd released, no crash. Replug and reopen.
 2. **With no client** (the app is streaming into a full work pool):
-   unplug. On builds with the resubmit-failure fix (`libusb-1.0.30-upgrade` branch) teardown takes
-   up to ~7 s because `sdrtcp_feed()` sleeps 500 ms per buffer when no client consumes data; it
-   must still finish.
-   Older builds can hang forever with the deleted usbfs fd held open (see references/known-issues).
+   unplug. On the Phase 2 branch, `sdrtcp_feed()` no longer sleeps and teardown is sub-second
+   (`rtlsdr_read_async stopped with -5` → `Device has been detached` →
+   `SdrException: LIBUSB_ERROR_NO_DEVICE`). Builds between the resubmit-failure fix and Phase 2
+   took up to ~7 s; older builds can hang forever with the deleted usbfs fd held open (see
+   references/known-issues).
 
 Checks after either test:
 
@@ -289,21 +292,24 @@ More detail, including log-tag meanings and native checks, is in `references/deb
 Short list; full symptoms and workarounds in `references/known-issues.md`.
 
 - **Command listener can exit immediately** right after a client connects (thread is created before
-  `STAGE_CLIENT_SERVING` is set). Commands sent immediately after connect are ignored. Delay ~1 s.
+  `STAGE_CLIENT_SERVING` is set). **Fixed on the Phase 2 branch**; older builds need a ~1 s delay.
 - **`recv() == 0` is not handled** in the command listener; a client EOF can spin the thread.
-- **`sdrtcp_cleanup()` leaks `client_socket`** (server side stays in `CLOSE_WAIT`). With
-  `listen(..., 1)`, a contaminated session can fill the accept queue and new connections hang in
-  `SYN_SENT`. Force-stop and relaunch if the listener exists but nothing connects.
-- **500 ms `sdrtcp_feed()` sleep** when no client is connected: slows disconnect teardown and blocks
-  the libusb event thread. Do not interpret the ~7 s no-client unplug delay as a hang on builds
-  that include the resubmit-failure fix.
+  **Fixed on the Phase 2 branch.**
+- **`sdrtcp_cleanup()` leaks `client_socket`** (server side stays in `CLOSE_WAIT`). **Fixed on the
+  Phase 2 branch** (socket is shut down and closed; no `CLOSE_WAIT` after teardown).
+- **500 ms `sdrtcp_feed()` sleep** when no client is connected. **Removed on the Phase 2 branch**;
+  buffers are dropped and no-client unplug teardown is sub-second.
 - **Misleading error reporting**: `rtlsdr_read_async` can log `failed: -5` and then
-  `finished successfully`; Java may report `SdrException: Unknown error!`. Check the preceding
-  failure line.
-- **Duplicate session after the USB permission dialog** (`LIBUSB_ERROR_BUSY`): see section 3.
+  `finished successfully`; Java may report `SdrException: Unknown error!`. **Fixed on the Phase 2
+  branch** (device loss maps to `LIBUSB_ERROR_NO_DEVICE` and the success log is conditional).
+- **Duplicate session after the USB permission dialog** (`LIBUSB_ERROR_BUSY`): **fixed on the
+  Phase 2 branch** (see section 3).
 - **Fixed on the `libusb-1.0.30-upgrade` branch**: a failed resubmission after a data completion
   used to be ignored, leaving no in-flight transfer and hanging the async read on unplug. If
   testing an older build or `master` before that branch lands, expect that hang.
+- **Also fixed on that branch (Phase 2)**: asynchronous `sdrtcp` teardown vs. the finalizer (the JNI
+  now joins the server thread before `rtlsdr_close`), `dev->rtl_dev` lifetime, the cancellation
+  free-while-flying window, and session serialization. See the parent plan §6c.
 
 ## 10. Quick checklist
 

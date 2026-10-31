@@ -27,6 +27,11 @@
 #include "tcp_commands.h"
 #include "rtlsdr_i2c.h"
 
+/* These match com.sdrtouch.core.exceptions.SdrException. They map to
+ * err_info.no_devices_found on the Java side. */
+#define SDR_LIBUSB_ERROR_NO_DEVICE (-4)
+#define SDR_LIBUSB_ERROR_NOT_FOUND (-5)
+
 #define RUN_OR(command, exit_command) { \
     int cmd_result = command; \
     if (cmd_result != 0) { \
@@ -40,6 +45,9 @@
 typedef struct rtlsdr_android {
     sdrtcp_t tcpserv;
     rtlsdr_dev_t * rtl_dev;
+    /* Set by close() so a session that is still opening stops instead of
+     * streaming forever without a client. */
+    volatile int stop_requested;
 } rtlsdr_android_t;
 
 #define WITH_DEV(x) rtlsdr_android_t* x = (rtlsdr_android_t*) pointer
@@ -180,6 +188,12 @@ void tcpClosedCallback(sdrtcp_t * tcpserv, void * pointer) {
 
 void rtlsdr_callback(unsigned char *buf, uint32_t len, void *pointer) {
     WITH_DEV(dev);
+    if (dev->stop_requested) {
+        /* close() arrived after the pre-read check but before the stream
+         * really started. Cancel on the first completion. */
+        if (dev->rtl_dev != NULL) rtlsdr_cancel_async(dev->rtl_dev);
+        return;
+    }
     if (dev->rtl_dev == NULL) return;
     sdrtcp_feed(&dev->tcpserv, buf, len / 2);
 }
@@ -249,21 +263,54 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
     }
 
     dev->rtl_dev = device;
-    sdrtcp_serve_client_async(&dev->tcpserv, (void *) dev, tcpCommandCallback, tcpClosedCallback);
+    if (!sdrtcp_serve_client_async(&dev->tcpserv, (void *) dev, tcpCommandCallback, tcpClosedCallback)) {
+        LOGI("ERROR: Failed to start the TCP server");
+        dev->rtl_dev = NULL;
+        rtlsdr_close(device);
+        RUN_OR(EXIT_WRONG_ARGS, goto rel_jni);
+    }
 
     int succesful = 1;
     EXCEPT_DO((*env)->CallVoidMethod(env, instance, announceOnOpen), succesful  = 0);
 
-    int read_result = rtlsdr_read_async(device, rtlsdr_callback, (void *) dev, 0, 0);
-    if (read_result) {
-        LOGI("rtlsdr_read_async failed: %d", read_result);
-        succesful = 0;
+    int read_result = 0;
+    if (dev->stop_requested) {
+        LOGI("Close was requested while the session was opening; not starting the stream");
+    } else {
+        read_result = rtlsdr_read_async(device, rtlsdr_callback, (void *) dev, 0, 0);
     }
-    LOGI("rtlsdr_read_async finished successfully");
+    int device_lost = rtlsdr_is_device_lost(device);
+
+    /* Stop the TCP server and wait until its threads have fully exited before
+     * touching the device or anything a callback may still use. This makes
+     * teardown synchronous: no command callback can run concurrently with
+     * rtlsdr_close() and the native session can be freed safely afterwards. */
+    sdrtcp_stop_serving_client(&dev->tcpserv);
+    sdrtcp_wait_closed(&dev->tcpserv);
 
     dev->rtl_dev = NULL;
     rtlsdr_close(device);
-    sdrtcp_stop_serving_client(&dev->tcpserv);
+
+    if (read_result) {
+        LOGI("rtlsdr_read_async stopped with %d", read_result);
+    } else {
+        LOGI("rtlsdr_read_async finished successfully");
+    }
+
+    if (device_lost) {
+        /* The dongle was unplugged (or its transfer path failed). Report a
+         * device-detached error so clients can tell this apart from a driver
+         * failure. */
+        LOGI("Device has been detached");
+        succesful = 0;
+        throwExceptionWithInt(env, "com/sdrtouch/core/exceptions/SdrException", SDR_LIBUSB_ERROR_NO_DEVICE);
+    } else if (read_result == SDR_LIBUSB_ERROR_NO_DEVICE || read_result == SDR_LIBUSB_ERROR_NOT_FOUND) {
+        succesful = 0;
+        throwExceptionWithInt(env, "com/sdrtouch/core/exceptions/SdrException", read_result);
+    } else if (read_result) {
+        succesful = 0;
+        throwExceptionWithInt(env, "com/sdrtouch/core/exceptions/SdrException", EXIT_UNKNOWN);
+    }
 
     (*env)->ReleaseStringUTFChars(env, address_, address);
     (*env)->ReleaseStringUTFChars(env, devicePath_, devicePath);
@@ -285,12 +332,15 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_initialize(JNIEnv *env, jobject ins
     rtlsdr_android_t* ptr = malloc(sizeof(rtlsdr_android_t));
     sdrtcp_init(&ptr->tcpserv);
     ptr->rtl_dev = NULL;
+    ptr->stop_requested = 0;
     return (jlong) ptr;
 }
 
 JNIEXPORT void JNICALL
 Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_deInit(JNIEnv *env, jobject instance, jlong pointer) {
     WITH_DEV(dev);
+    /* Make sure no server thread is left before freeing anything it may use. */
+    sdrtcp_stop_serving_client(&dev->tcpserv);
     sdrtcp_free(&dev->tcpserv);
     if (dev->rtl_dev != NULL) {
         rtlsdr_close(dev->rtl_dev);
@@ -303,6 +353,7 @@ JNIEXPORT void JNICALL
 Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_close__J(JNIEnv *env, jobject instance,
                                                       jlong pointer) {
     WITH_DEV(dev);
+    dev->stop_requested = 1;
     sdrtcp_stop_serving_client(&dev->tcpserv);
 }
 

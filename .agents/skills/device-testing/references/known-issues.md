@@ -1,8 +1,12 @@
 # Known issues when device-testing the driver
 
 Observed on driver builds around version 3.16 during the libusb 1.0.30 upgrade (branch
-`libusb-1.0.30-upgrade`, not merged into `master` at the time of writing). Some are fixed on that
-branch; the rest are app-side work items.
+`libusb-1.0.30-upgrade`, not merged into `master` at the time of writing).
+
+**Status update 2026-10-31:** the parent-plan Phase 2 lifecycle fixes are implemented on this
+branch and device-tested. Items **1–7 and 12** are fixed there (see the parent plan §6c in
+`.artifacts/`); the workarounds below are only needed for older builds. Item 8 (replug auto-start)
+is external/timing-dependent and item 10 (wireless `adb forward`) is environmental.
 
 ## 1. Duplicate session after the USB permission dialog
 
