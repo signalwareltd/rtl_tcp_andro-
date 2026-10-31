@@ -48,9 +48,34 @@ typedef struct rtlsdr_android {
     /* Set by close() so a session that is still opening stops instead of
      * streaming forever without a client. */
     volatile int stop_requested;
+    /* The sdrtcp server thread never exited; the whole native session is
+     * intentionally leaked so the thread can never touch freed memory. */
+    int native_leaked;
 } rtlsdr_android_t;
 
 #define WITH_DEV(x) rtlsdr_android_t* x = (rtlsdr_android_t*) pointer
+
+/* How long to wait for the sdrtcp server thread after asking it to stop, and
+ * how long the forced-shutdown fallback gets before the session is leaked. */
+#define SDRTCP_CLOSE_TIMEOUT_MS (5000)
+#define SDRTCP_STUCK_TIMEOUT_MS (2000)
+
+static void stop_tcp_server(rtlsdr_android_t *dev) {
+    sdrtcp_stop_serving_client(&dev->tcpserv);
+    if (sdrtcp_wait_closed_timeout(&dev->tcpserv, SDRTCP_CLOSE_TIMEOUT_MS)) {
+        return;
+    }
+
+    LOGI("SdrTcp: server thread did not exit in %d ms; forcing socket shutdown",
+         SDRTCP_CLOSE_TIMEOUT_MS);
+    sdrtcp_force_close_sockets(&dev->tcpserv);
+    if (sdrtcp_wait_closed_timeout(&dev->tcpserv, SDRTCP_STUCK_TIMEOUT_MS)) {
+        return;
+    }
+
+    LOGI("SdrTcp: server thread is stuck; leaking the native session");
+    dev->native_leaked = 1;
+}
 
 void initialize(JNIEnv *env) {
     LOGI_NATIVE("Initializing");
@@ -285,11 +310,16 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_openAsync(
      * touching the device or anything a callback may still use. This makes
      * teardown synchronous: no command callback can run concurrently with
      * rtlsdr_close() and the native session can be freed safely afterwards. */
-    sdrtcp_stop_serving_client(&dev->tcpserv);
-    sdrtcp_wait_closed(&dev->tcpserv);
+    stop_tcp_server(dev);
 
-    dev->rtl_dev = NULL;
-    rtlsdr_close(device);
+    if (!dev->native_leaked) {
+        dev->rtl_dev = NULL;
+        rtlsdr_close(device);
+    } else {
+        /* A TCP thread may still use the device; leaking the whole native
+         * session is the only safe option. deInit() will not free it. */
+        LOGI("SdrTcp: skipping rtlsdr_close() for the leaked native session");
+    }
 
     if (read_result) {
         LOGI("rtlsdr_read_async stopped with %d", read_result);
@@ -333,12 +363,17 @@ Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_initialize(JNIEnv *env, jobject ins
     sdrtcp_init(&ptr->tcpserv);
     ptr->rtl_dev = NULL;
     ptr->stop_requested = 0;
+    ptr->native_leaked = 0;
     return (jlong) ptr;
 }
 
 JNIEXPORT void JNICALL
 Java_com_sdrtouch_rtlsdr_driver_RtlSdrDevice_deInit(JNIEnv *env, jobject instance, jlong pointer) {
     WITH_DEV(dev);
+    if (dev->native_leaked) {
+        LOGI("SdrTcp: native session was leaked after a stuck teardown; not freeing it");
+        return;
+    }
     /* Make sure no server thread is left before freeing anything it may use. */
     sdrtcp_stop_serving_client(&dev->tcpserv);
     sdrtcp_free(&dev->tcpserv);

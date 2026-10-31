@@ -40,6 +40,9 @@ typedef struct workpool {
 // thread safe methods
 extbuffer_t * pool_get_wait_lock(workpool_t * pool, int id, int block);
 void pool_get_unlock(workpool_t * pool, int id,  extbuffer_t * buffer);
+// Wakes every thread blocked in pool_get_wait_lock(). Used when a session is
+// stopping so serveClient does not wait for its 1 s pool timeout.
+void pool_signal_all(workpool_t * pool);
 
 
 // non thread safe methods

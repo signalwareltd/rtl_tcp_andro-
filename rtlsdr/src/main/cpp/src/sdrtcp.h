@@ -50,6 +50,13 @@ struct sdrtcp {
     volatile int client_socket;
     volatile int listen_socket;
 
+    // Non-blocking self-pipes. The server thread polls server_wakeup[0] and
+    // the command listener polls command_wakeup[0], so a stop request takes
+    // effect immediately instead of waiting for a select() timeout. A value
+    // of -1 means the pipe could not be created (timeouts still apply).
+    int server_wakeup[2];
+    int command_wakeup[2];
+
     // The server thread owns the sockets and the work pool once it has been
     // started. sdrtcp_wait_closed() must be called before sdrtcp_free().
     pthread_t worker_thread;
@@ -80,8 +87,18 @@ void sdrtcp_stop_serving_client(sdrtcp_t * obj);
 // before sdrtcp_free() so the native session can be freed safely.
 void sdrtcp_wait_closed(sdrtcp_t * obj);
 
+// Bounded variant of sdrtcp_wait_closed(). Returns 1 if the server thread has
+// exited, 0 on timeout. timeout_ms < 0 waits without a timeout.
+int sdrtcp_wait_closed_timeout(sdrtcp_t * obj, int timeout_ms);
+
+// Last-resort fallback: shuts down the sockets from another thread (without
+// closing the fds; the worker still owns them) and wakes both loops. The
+// worker should then exit and clean up normally.
+void sdrtcp_force_close_sockets(sdrtcp_t * obj);
+
 // queue up data to send over the connection
-// return 0 if there was an error and this function should not be called anymore until another sdrtcp_open_socket
+// returns 1 if the buffer was queued for the client, 0 if it was dropped
+// (no client/session active). Callers may ignore the result.
 int sdrtcp_feed(sdrtcp_t * obj, unsigned char * buf, uint32_t len);
 
 #endif

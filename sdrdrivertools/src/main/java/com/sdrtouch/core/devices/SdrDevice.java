@@ -67,6 +67,17 @@ public abstract class SdrDevice implements Serializable {
 		}
 	}
 
+	/**
+	 * Called by the driver host to finish a session request that will never be
+	 * opened (for example when a newer request supersedes it in the queue).
+	 * Listeners are notified as if the session had closed, so the requesting UI
+	 * can finish. Only use this for requests whose openAsync() was never called.
+	 */
+	public void cancelPendingOpen() {
+		close();
+		announceOnClosed(null);
+	}
+
 	public abstract int[] getSupportedCommands();
 	
 	/**

@@ -29,7 +29,9 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Pair;
 
@@ -41,8 +43,10 @@ import com.sdrtouch.core.devices.SdrDevice.OnStatusListener;
 import com.sdrtouch.tools.Check;
 import com.sdrtouch.tools.Log;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
@@ -59,6 +63,7 @@ public class BinaryRunnerService extends Service {
 
 	private PowerManager.WakeLock wl = null;
 
+	private final Handler mainHandler = new Handler(Looper.getMainLooper());
 	private final IBinder mBinder = new LocalBinder();
 	private boolean isRunning = false;
 	/** An openAsync() is in progress or a session is running. Guarded by this. */
@@ -79,9 +84,20 @@ public class BinaryRunnerService extends Service {
 	}
 
 	private void addWork(SdrDevice sdrDevice, SdrTcpArguments arguments) {
+		List<SdrDevice> superseded = new ArrayList<>();
 		synchronized (workQueue) {
+			// Latest request wins: a queued session that never started must not
+			// hold up the new request (and its activity must be finished).
+			Pair<SdrDevice, SdrTcpArguments> old;
+			while ((old = workQueue.poll()) != null) {
+				superseded.add(old.first);
+			}
 			Log.appendLine("Queueing");
 			workQueue.add(new Pair<>(sdrDevice, arguments));
+		}
+		for (SdrDevice old : superseded) {
+			Log.appendLine("Superseding queued session request for %s", old.getName());
+			old.cancelPendingOpen();
 		}
 	}
 
@@ -121,7 +137,15 @@ public class BinaryRunnerService extends Service {
 			announceRunning(thisSdrDevice);
 			thisSdrDevice.addOnStatusListener(onStatusListener);
 			thisSdrDevice.openAsync(sdrTcpArguments);
-			startForeground();
+
+			// Service lifecycle calls belong on the main thread. Skip the
+			// notification if this session has already ended by the time it runs.
+			final SdrDevice session = thisSdrDevice;
+			mainHandler.post(() -> {
+				synchronized (BinaryRunnerService.this) {
+					if (thisSdrDevice == session) startForeground();
+				}
+			});
 		}
 	}
 
@@ -162,7 +186,7 @@ public class BinaryRunnerService extends Service {
 		@Override
 		public void onOpen(SdrDevice sdrDevice) {
 			Log.appendLine("The rtl-tcp implementation is running and is ready to accept clients");
-			ackquireWakeLock();
+			mainHandler.post(BinaryRunnerService.this::ackquireWakeLock);
 		}
 
 		@Override
@@ -183,7 +207,9 @@ public class BinaryRunnerService extends Service {
 				}
 				sendBroadcast(bIntent);
 
-				stopForeground(true);
+				// Posted before startWithDevice() below posts the next startForeground,
+				// so the main-thread queue keeps stop/start ordered.
+				mainHandler.post(() -> stopForeground(true));
 				thisSdrDevice = null;
 				sessionActive = false;
 

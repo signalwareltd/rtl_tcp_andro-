@@ -46,14 +46,18 @@ Cause: `sdrtcp_cleanup()` never closes the client socket.
 Workaround: force-stop the app and relaunch. If the listener exists but nothing connects, this is
 the first thing to check.
 
-## 5. 500 ms sleep in `sdrtcp_feed()` when no client
+## 5. Blocking in `sdrtcp_feed()` when no client (or a stalled client)
 
-Symptom: with no TCP client, unplug teardown takes up to ~7 s (15 transfers x 500 ms) and the libusb
-event thread is blocked inside the app callback.
+Symptom: with no TCP client, unplug teardown takes up to ~7 s (15 transfers x 500 ms). With a
+client that is connected but never reads, unplug detection could take up to ~15 s (15 transfers x
+1 s pool wait) even though the teardown that followed was clean.
 
-Cause: `sdrtcp_feed()` sleeps instead of dropping buffers when no client is consuming data.
+Cause: `sdrtcp_feed()` slept 500 ms when no client was consuming data, and `pool_get_wait_lock()`
+blocked for up to 1 s per buffer when the work pool was full. Both run on the libusb receive thread.
 
-Workaround: treat up to ~7 s as expected on current builds; use an active client for the fast path.
+Workaround: on builds before the lifecycle hardening, expect the delays; use an active client for
+the fast path. **Fixed on the hardening build (2026-10-31):** the feed path neither sleeps nor
+blocks; teardown is milliseconds in both cases.
 
 ## 6. Misleading error reporting
 

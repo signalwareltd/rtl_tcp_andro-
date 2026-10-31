@@ -28,6 +28,10 @@
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
+#if !defined(NDEBUG) && defined(__ANDROID__)
+#include <sys/system_properties.h>
+#endif
+
 #include <libusb.h>
 
 /*
@@ -46,6 +50,25 @@
 #include "rtl-sdr.h"
 #include "rtl-sdr-android.h"
 #include "tuner_e4k.h"
+
+#ifndef NDEBUG
+/* Debug-only test hooks: device tests can force rarely hit paths with a system
+ * property instead of building a special variant. Release builds compile this
+ * out entirely. */
+static int rtlsdr_debug_property_int(const char *name, int fallback) {
+#if defined(__ANDROID__)
+	char value[PROP_VALUE_MAX];
+	if (__system_property_get(name, value) > 0) {
+		char *end = NULL;
+		long parsed = strtol(value, &end, 10);
+		if (end != value && *end == '\0')
+			return (int) parsed;
+	}
+#endif
+	(void) name;
+	return fallback;
+}
+#endif
 #include "tuner_fc0012.h"
 #include "tuner_fc0013.h"
 #include "tuner_fc2580.h"
@@ -1740,6 +1763,12 @@ static void LIBUSB_CALL _libusb_callback(struct libusb_transfer *xfer)
 	if (dev->xfer_outstanding > 0)
 		dev->xfer_outstanding--;
 
+	if (dev->xfer_leaked) {
+		/* Deliberately leaked after a cancellation timeout; libusb may still
+		 * own this transfer. Do not feed data and do not resubmit it. */
+		return;
+	}
+
 	if (LIBUSB_TRANSFER_COMPLETED == xfer->status) {
 		if (dev->cb)
 			dev->cb(xfer->buffer, xfer->actual_length, dev->cb_ctx);
@@ -1873,6 +1902,8 @@ static int _rtlsdr_free_async_buffers(rtlsdr_dev_t *dev)
 		 * instead: widgets are finite, a SIGSEGV is not recoverable. */
 		fprintf(stderr, "rtlsdr: leaking async buffers after an "
 			"incomplete cancellation\n");
+		dev->dev_lost = 1;
+		dev->cb = NULL;
 		dev->xfer = NULL;
 		dev->xfer_buf = NULL;
 		return 0;
@@ -1923,8 +1954,14 @@ static int _rtlsdr_free_async_buffers(rtlsdr_dev_t *dev)
 static void _rtlsdr_drain_async_transfers(rtlsdr_dev_t *dev)
 {
 	int elapsed = 0;
+	int timeout_ms = CANCEL_DRAIN_TIMEOUT_MS;
 
-	while (dev->xfer_outstanding > 0 && elapsed < CANCEL_DRAIN_TIMEOUT_MS) {
+#ifndef NDEBUG
+	/* `adb shell setprop debug.rtlsdr.drain_timeout_ms 0` forces the leak path. */
+	timeout_ms = rtlsdr_debug_property_int("debug.rtlsdr.drain_timeout_ms", timeout_ms);
+#endif
+
+	while (dev->xfer_outstanding > 0 && elapsed < timeout_ms) {
 		struct timeval tv = { 0, CANCEL_DRAIN_STEP_MS * 1000 };
 		unsigned int i;
 
@@ -1943,6 +1980,9 @@ static void _rtlsdr_drain_async_transfers(rtlsdr_dev_t *dev)
 			"%d ms, leaking them to avoid a use-after-free\n",
 			dev->xfer_outstanding, elapsed);
 		dev->xfer_leaked = 1;
+		dev->dev_lost = 1;
+		/* Late completions must not feed the driver or be resubmitted. */
+		dev->cb = NULL;
 	}
 }
 
@@ -2183,11 +2223,23 @@ int rtlsdr_open2(rtlsdr_dev_t **out_dev, int fd, const char * devicePath) {
 
 	/* On Android an unrooted app cannot enumerate USB devices. Skip device
 	 * discovery and wrap the fd the app already has permission for. */
-	struct libusb_init_option options[1];
+	struct libusb_init_option options[2];
+	int option_count = 1;
 	options[0].option = LIBUSB_OPTION_NO_DEVICE_DISCOVERY;
 	options[0].value.ival = 1;
 
-	int status = libusb_init_context(&dev->ctx, options, 1);
+#ifndef NDEBUG
+	/* `adb shell setprop debug.rtlsdr.libusb_log_level 4` enables libusb debug
+	 * logging, including the "need N urbs" line per submitted transfer. */
+	int log_level = rtlsdr_debug_property_int("debug.rtlsdr.libusb_log_level", -1);
+	if (log_level >= LIBUSB_LOG_LEVEL_NONE && log_level <= LIBUSB_LOG_LEVEL_DEBUG) {
+		options[1].option = LIBUSB_OPTION_LOG_LEVEL;
+		options[1].value.ival = log_level;
+		option_count = 2;
+	}
+#endif
+
+	int status = libusb_init_context(&dev->ctx, options, option_count);
 	if (status != LIBUSB_SUCCESS)
 		return status;
 	else if (dev->ctx == NULL)

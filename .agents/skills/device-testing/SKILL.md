@@ -229,9 +229,11 @@ manually, and test two variants:
 2. **With no client** (the app is streaming into a full work pool):
    unplug. On the Phase 2 branch, `sdrtcp_feed()` no longer sleeps and teardown is sub-second
    (`rtlsdr_read_async stopped with -5` → `Device has been detached` →
-   `SdrException: LIBUSB_ERROR_NO_DEVICE`). Builds between the resubmit-failure fix and Phase 2
-   took up to ~7 s; older builds can hang forever with the deleted usbfs fd held open (see
-   references/known-issues).
+   `SdrException: LIBUSB_ERROR_NO_DEVICE`). On the lifecycle-hardening build the feed path also
+   never waits on the work pool, so teardown is milliseconds — including with a stalled client that
+   never reads (that case used to delay detection by up to ~15 s). Builds between the
+   resubmit-failure fix and Phase 2 took up to ~7 s; older builds can hang forever with the deleted
+   usbfs fd held open (see references/known-issues).
 
 Checks after either test:
 
@@ -298,7 +300,9 @@ Short list; full symptoms and workarounds in `references/known-issues.md`.
 - **`sdrtcp_cleanup()` leaks `client_socket`** (server side stays in `CLOSE_WAIT`). **Fixed on the
   Phase 2 branch** (socket is shut down and closed; no `CLOSE_WAIT` after teardown).
 - **500 ms `sdrtcp_feed()` sleep** when no client is connected. **Removed on the Phase 2 branch**;
-  buffers are dropped and no-client unplug teardown is sub-second.
+  buffers are dropped and no-client unplug teardown is sub-second. The lifecycle-hardening build
+  also removed the 1 s work-pool wait from the feed path, so a stalled (never-reading) client no
+  longer delays disconnect detection.
 - **Misleading error reporting**: `rtlsdr_read_async` can log `failed: -5` and then
   `finished successfully`; Java may report `SdrException: Unknown error!`. **Fixed on the Phase 2
   branch** (device loss maps to `LIBUSB_ERROR_NO_DEVICE` and the success log is conditional).

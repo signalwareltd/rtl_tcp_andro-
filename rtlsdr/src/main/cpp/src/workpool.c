@@ -88,6 +88,16 @@ extbuffer_t * pool_get_wait_lock(workpool_t * pool, int id, int block) {
 	return result;
 }
 
+void pool_signal_all(workpool_t * pool) {
+	int i;
+	if (!pool->valid) return;
+	for (i = 0; i < pool->max_ids; i++) {
+		pthread_mutex_lock(&pool->mutexes[i]);
+		pthread_cond_broadcast(&pool->conditions[i]);
+		pthread_mutex_unlock(&pool->mutexes[i]);
+	}
+}
+
 void pool_get_unlock(workpool_t * pool, int id,  extbuffer_t * buffer) {
 	if (!pool->valid) return;
 #if WORKPOOL_WARNINGS

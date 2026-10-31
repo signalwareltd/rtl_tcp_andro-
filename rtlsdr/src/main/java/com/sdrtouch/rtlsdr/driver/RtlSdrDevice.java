@@ -30,10 +30,20 @@ import com.sdrtouch.core.exceptions.SdrException;
 import com.sdrtouch.tools.Log;
 import com.sdrtouch.tools.UsbPermissionObtainer;
 
+/**
+ * RTL-SDR session. One instance drives exactly one openAsync()/close() cycle:
+ * a new instance is created for every session, and calling openAsync() again
+ * after the session ended is rejected.
+ */
 public class RtlSdrDevice extends SdrDevice {
     private final UsbDevice usbDevice;
     private final long nativeHandler;
     private volatile boolean closeRequested;
+
+    /** Guards started/disposed and all calls into the native handler. */
+    private final Object nativeLock = new Object();
+    private boolean started;
+    private boolean disposed;
 
 
     public RtlSdrDevice(Context context, UsbDevice usbDevice) {
@@ -44,6 +54,17 @@ public class RtlSdrDevice extends SdrDevice {
 
     @Override
     public void openAsync(final SdrTcpArguments sdrTcpArguments) {
+        boolean duplicate;
+        synchronized (nativeLock) {
+            duplicate = started;
+            if (!duplicate) started = true;
+        }
+        if (duplicate) {
+            Log.appendLine("RtlSdrDevice.openAsync called again; this device is single-use");
+            announceOnClosed(new IllegalStateException("RtlSdrDevice is single-use"));
+            return;
+        }
+
         new Thread() {
             @Override
             public void run() {
@@ -74,6 +95,7 @@ public class RtlSdrDevice extends SdrDevice {
                     }
                 }
                 announceOnClosed(error);
+                dispose();
             }
         }.start();
     }
@@ -81,7 +103,27 @@ public class RtlSdrDevice extends SdrDevice {
     @Override
     public void close() {
         closeRequested = true;
-        close(nativeHandler);
+        synchronized (nativeLock) {
+            if (disposed) return;
+            if (!started) {
+                // The session never started (for example it was superseded in
+                // the service queue): release the native handler right away.
+                disposed = true;
+                deInit(nativeHandler);
+            } else {
+                close(nativeHandler);
+            }
+        }
+    }
+
+    /** Releases the native session exactly once, regardless of which thread
+     *  finishes the session first. */
+    private void dispose() {
+        synchronized (nativeLock) {
+            if (disposed) return;
+            disposed = true;
+            deInit(nativeHandler);
+        }
     }
 
     @Override
@@ -92,7 +134,7 @@ public class RtlSdrDevice extends SdrDevice {
     @Override
     protected void finalize() throws Throwable {
         super.finalize();
-        deInit(nativeHandler);
+        dispose();
     }
 
     @Override

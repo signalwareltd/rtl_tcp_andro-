@@ -1401,6 +1401,10 @@ static int initialize_handle(struct libusb_device_handle *handle, int fd)
 		hpriv->caps = USBFS_CAP_BULK_CONTINUATION;
 	}
 
+	/* Local addition: makes it visible in device tests whether the SG path
+	 * (num_urbs == 1) or the split path (num_urbs > 1) is used. */
+	usbi_dbg(HANDLE_CTX(handle), "usbfs caps: 0x%x", hpriv->caps);
+
 	return usbi_add_event_source(HANDLE_CTX(handle), hpriv->fd, POLLOUT);
 }
 

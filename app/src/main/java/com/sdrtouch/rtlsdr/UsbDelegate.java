@@ -21,8 +21,8 @@
 package com.sdrtouch.rtlsdr;
 
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
@@ -37,19 +37,33 @@ public class UsbDelegate extends Activity {
         super.onCreate(savedInstanceState);
 
         Intent intent = getIntent();
+        String action = intent == null ? null : intent.getAction();
+        Log.appendLine(TAG + " onCreate action=" + action);
 
-        if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
+        if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
             UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-            if (usbDevice != null) {
+            if (usbDevice == null) {
+                Log.appendLine(TAG + " USB attached but EXTRA_DEVICE is null");
+            } else {
                 Log.appendLine(TAG + " USB attached: " + usbDevice.getDeviceName());
                 Intent newIntent = new Intent(BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED);
                 newIntent.putExtra(UsbManager.EXTRA_DEVICE, usbDevice);
+
+                ResolveInfo resolved = getPackageManager().resolveActivity(newIntent, 0);
+                Log.appendLine(TAG + " " + BinaryRunnerService.ACTION_SDR_DEVICE_ATTACHED
+                        + " resolves to " + (resolved == null
+                        ? "nothing"
+                        : resolved.activityInfo.packageName + "/" + resolved.activityInfo.name));
+
                 try {
                     startActivity(newIntent);
-                } catch (ActivityNotFoundException e) {
-                    Log.appendLine(TAG + " no activity found for SDR handling");
+                    Log.appendLine(TAG + " attach intent dispatched");
+                } catch (Throwable e) {
+                    Log.appendLine(TAG + " no activity found for SDR handling: " + e);
                 }
             }
+        } else if (action != null) {
+            Log.appendLine(TAG + " unhandled action " + action);
         }
 
         finish();
