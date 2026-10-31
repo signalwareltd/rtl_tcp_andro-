@@ -22,14 +22,18 @@ package com.sdrtouch.rtlsdr;
 
 import static com.sdrtouch.rtlsdr.SdrDeviceProviderRegistry.SDR_DEVICE_PROVIDERS;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
@@ -51,10 +55,13 @@ import java.util.List;
 import marto.rtl_tcp_andro.R;
 
 public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog.OnDeviceDialog {
+	private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 2;
+
 	private volatile SdrTcpArguments sdrTcpArguments;
 	private volatile UsbDevice usbDevice;
 
 	private volatile SdrServiceConnection mConnection;
+	private boolean notificationPermissionRequested;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -161,6 +168,7 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
 	 */
 	public void startServer(final SdrDevice sdrDevice) {
 		try {
+			requestNotificationPermissionIfNeeded();
 			//start the service
 			mConnection = new SdrServiceConnection(sdrDevice, sdrTcpArguments, this::finishWithError);
 			sdrDevice.addOnStatusListener(onDeviceStatusListener);
@@ -173,6 +181,18 @@ public class DeviceOpenActivity extends FragmentActivity implements DeviceDialog
             bindService(serviceIntent, mConnection, Context.BIND_AUTO_CREATE);
 		} catch (Exception e) {
 			finishWithError(e);
+		}
+	}
+
+	private void requestNotificationPermissionIfNeeded() {
+		if (notificationPermissionRequested || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+			return;
+		}
+		if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+			// POST_NOTIFICATIONS is not required for the foreground service to run: if the user
+			// declines, the stream still starts and the notification is simply not shown.
+			notificationPermissionRequested = true;
+			ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
 		}
 	}
 
