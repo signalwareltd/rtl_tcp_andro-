@@ -1,0 +1,33 @@
+{
+  "capabilities": 10,
+  "claims": 118,
+  "features": 8,
+  "files": {
+    ".gitignore": "3dac8ad5ea571eeb05898f39",
+    "ARCHITECTURE.md": "a617706a67ccc154df5a9f7c",
+    "CODE_MAP.md": "ef783dc6bfa7cdb00791ee51",
+    "EVIDENCE.md": "a143eb48b216b493166edfb9",
+    "FEATURE_INDEX.md": "8684176c6d6527d3301c479e",
+    "PRODUCT_OVERVIEW.md": "945b9533c34e1496329e6052",
+    "README.md": "a7075cb4091027cf2d2a0c87",
+    "SOURCES.md": "80d781a364af732764f4e6f1",
+    "USER_MANUAL.md": "7439a314538cd118ee4b2a00",
+    "code-pointers.json": "2af859de0ac5c922837f6edb",
+    "diagrams/architecture.md": "8ad529ebd031344a2de0eecc",
+    "features/F-0001-binary-runner.md": "c48aa4612e32b7413e87841f",
+    "features/F-0002-device-open.md": "a559ef1452bf2fc0e136069d",
+    "features/F-0003-hackrf-module.md": "c199033d4a492d5a2b920e72",
+    "features/F-0004-protocol-and-command-contract.md": "4b5455405ebd397791697981",
+    "features/F-0005-rtlsdr-module.md": "b852eafff05ffb5f8f4f631e",
+    "features/F-0006-sdrdrivertools-module.md": "eb1a83dba56635eeca06a411",
+    "features/F-0007-stream.md": "e4f4c3ddcb2e43b5270ce90e",
+    "features/F-0008-usb-delegate.md": "efdcffcde0d949e219f84995",
+    "llms.txt": "9d67655e5ca9c0694311893a"
+  },
+  "journeys": 5,
+  "profile": "public",
+  "schema_version": 1,
+  "snapshots": {
+    "app": "3e261f5a7576"
+  }
+}

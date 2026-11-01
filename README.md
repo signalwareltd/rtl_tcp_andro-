@@ -1,5 +1,9 @@
 # Usage
 
+<!-- deepspec:begin -->
+> **AI documentation.** Start with [`docs/ai/README.md`](docs/ai/README.md) for the product overview, user manual, features, architecture, code pointers and public evidence.
+<!-- deepspec:end -->
+
 This driver implements an extension of the rtl-tcp protocol. It is fully compatible with any rtl-tcp capable client. However it also adds a number of additional commands that can allow Android clients to use the same API to control other SDR hardware devices such as the SDRplay or HackRF.
 
 Here are the steps you need to take when building your app so you can start receiving I/Q samples and control the tuner.

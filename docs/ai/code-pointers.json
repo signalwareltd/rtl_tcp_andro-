@@ -1,0 +1,50 @@
+{
+  "F-0001": {
+    "path": "app/src/main/java/com/sdrtouch/rtlsdr/SdrServiceConnection.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "SdrServiceConnection#onServiceConnected(ComponentName,IBinder)"
+  },
+  "F-0002": {
+    "path": "app/src/main/java/com/sdrtouch/rtlsdr/DeviceOpenActivity.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "com.sdrtouch.rtlsdr.DeviceOpenActivity#onCreate(Bundle)"
+  },
+  "F-0003": {
+    "path": "hackrf/src/main/java/com/mantz_it/hackrf_android/Hackrf.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "com.mantz_it.hackrf_android.Hackrf"
+  },
+  "F-0004": {
+    "path": "app/src/main/java/com/sdrtouch/rtlsdr/BinaryRunnerService.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "com.sdrtouch.rtlsdr.BinaryRunnerService.onStartCommand"
+  },
+  "F-0005": {
+    "path": "rtlsdr/src/main/java/com/sdrtouch/rtlsdr/driver/RtlSdrDevice.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "com.sdrtouch.rtlsdr.driver.RtlSdrDevice"
+  },
+  "F-0006": {
+    "path": "sdrdrivertools/src/main/java/com/sdrtouch/core/SdrTcpArguments.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "com.sdrtouch.core.SdrTcpArguments"
+  },
+  "F-0007": {
+    "path": "app/src/main/java/com/sdrtouch/rtlsdr/StreamActivity.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "com.sdrtouch.rtlsdr.StreamActivity#onCreate(Bundle)"
+  },
+  "F-0008": {
+    "path": "app/src/main/java/com/sdrtouch/rtlsdr/UsbDelegate.java",
+    "repo": "app",
+    "snapshot": "3e261f5a7576",
+    "symbol": "UsbDelegate#onCreate(Bundle)"
+  }
+}
