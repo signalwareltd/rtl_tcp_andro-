@@ -1,0 +1,1 @@
+package android.hardware.usb;public class UsbDevice {private final String name;private final int id,vid,pid;public UsbDevice(String n,int i,int v,int p){name=n;id=i;vid=v;pid=p;}public String getDeviceName(){return name;}public int getDeviceId(){return id;}public int getVendorId(){return vid;}public int getProductId(){return pid;}}

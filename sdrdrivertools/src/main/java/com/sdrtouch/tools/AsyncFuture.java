@@ -20,62 +20,100 @@
 
 package com.sdrtouch.tools;
 
-import static com.sdrtouch.tools.Check.isTrue;
-
-import androidx.annotation.NonNull;
-
+import java.util.Objects;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * This is a future task that will block until result has been returned
- */
+/** A single-completion future. Producers must cooperate with cancellation. */
 public class AsyncFuture<V> implements Future<V> {
     private final Object locker = new Object();
     private V object;
-    private boolean ready = false;
+    private Throwable failure;
+    private boolean ready;
+    private boolean cancelled;
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
-        return false;
+        synchronized (locker) {
+            if (ready) return false;
+            cancelled = true;
+            ready = true;
+            locker.notifyAll();
+        }
+        // No producer thread belongs to this future. The owner cancels its
+        // external operation here; never invoke external code under locker.
+        onCancelled();
+        return true;
     }
+
+    protected void onCancelled() {}
 
     @Override
     public boolean isCancelled() {
-        return false;
+        synchronized (locker) { return cancelled; }
     }
 
     @Override
     public boolean isDone() {
-        synchronized (locker) {
-            return ready;
-        }
+        synchronized (locker) { return ready; }
     }
 
     @Override
     public V get() throws InterruptedException, ExecutionException {
         synchronized (locker) {
-            locker.wait();
-            return object;
+            while (!ready) locker.wait();
+            return result();
         }
     }
 
     @Override
-    public V get(long timeout, @NonNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public V get(long timeout, TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        Objects.requireNonNull(unit, "unit");
+        final long budget = unit.toNanos(timeout);
+        final long start = System.nanoTime();
         synchronized (locker) {
-            locker.wait(unit.toMillis(timeout));
-            return object;
+            long remaining = budget;
+            while (!ready) {
+                if (remaining <= 0) throw new TimeoutException();
+                TimeUnit.NANOSECONDS.timedWait(locker, remaining);
+                remaining = budget - (System.nanoTime() - start);
+            }
+            return result();
         }
     }
 
-    public void setDone(V object) {
+    private V result() throws ExecutionException {
+        if (cancelled) throw new CancellationException();
+        if (failure != null) throw new ExecutionException(failure);
+        return object;
+    }
+
+    /** False means the caller still owns (and must release) the supplied value. */
+    public boolean trySetDone(V value) {
         synchronized (locker) {
-            isTrue(!this.ready);
-            this.object = object;
-            this.ready = true;
-            locker.notify();
+            if (ready) return false;
+            object = value;
+            ready = true;
+            locker.notifyAll();
+            return true;
         }
     }
+
+    public boolean trySetException(Throwable error) {
+        Objects.requireNonNull(error, "error");
+        synchronized (locker) {
+            if (ready) return false;
+            failure = error;
+            ready = true;
+            locker.notifyAll();
+            return true;
+        }
+    }
+
+    /** Compatible setter for producers that do not transfer a resource. */
+    public void setDone(V value) { trySetDone(value); }
 }

@@ -30,118 +30,182 @@ import com.sdrtouch.core.exceptions.SdrException;
 import com.sdrtouch.tools.Log;
 import com.sdrtouch.tools.UsbPermissionObtainer;
 
-/**
- * RTL-SDR session. One instance drives exactly one openAsync()/close() cycle:
- * a new instance is created for every session, and calling openAsync() again
- * after the session ended is rejected.
- */
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+/** One instance owns one permission/open/close operation. */
 public class RtlSdrDevice extends SdrDevice {
+    private static final long PERMISSION_TIMEOUT_MS = 20_000;
     private final UsbDevice usbDevice;
     private final long nativeHandler;
+    private final transient NativeSession session;
+    private final transient PermissionSource permissions;
+    private final long permissionTimeoutMs;
     private volatile boolean closeRequested;
-
-    /** Guards started/disposed and all calls into the native handler. */
     private final Object nativeLock = new Object();
     private boolean started;
+    private boolean nativeStarting;
     private boolean disposed;
+    private transient Future<UsbDeviceConnection> permissionFuture;
+    private transient Thread worker;
 
+    // Package-private seams let host tests exercise the production ownership
+    // code without loading JNI, opening USB or running acquisition.
+    interface PermissionSource {
+        Future<UsbDeviceConnection> obtain(Context context, UsbDevice device);
+    }
+    interface NativeSession {
+        long initialize();
+        boolean open(long pointer, int fd, SdrTcpArguments args, String path) throws Exception;
+        void close(long pointer);
+        void dispose(long pointer);
+    }
 
-    public RtlSdrDevice(Context context, UsbDevice usbDevice) {
+    public RtlSdrDevice(Context context, UsbDevice device) {
+        this(context, device, null, UsbPermissionObtainer::obtainFdFor, PERMISSION_TIMEOUT_MS);
+    }
+
+    RtlSdrDevice(Context context, UsbDevice device, NativeSession backend,
+                 PermissionSource permissions, long timeoutMs) {
         super(context);
-        this.usbDevice = usbDevice;
-        this.nativeHandler = initialize();
+        if (timeoutMs <= 0) throw new IllegalArgumentException("permission timeout");
+        this.usbDevice = device;
+        this.permissions = permissions;
+        this.permissionTimeoutMs = timeoutMs;
+        this.session = backend != null ? backend : new NativeSession() {
+            @Override public long initialize() { return RtlSdrDevice.this.initialize(); }
+            @Override public boolean open(long pointer, int fd, SdrTcpArguments a, String path) throws Exception {
+                return RtlSdrDevice.this.openAsync(pointer, fd, a.getGain(), a.getSamplerateHz(),
+                        a.getFrequencyHz(), a.getPort(), a.getPpm(), a.getBiasT(), a.getAddress(), path);
+            }
+            @Override public void close(long pointer) { RtlSdrDevice.this.close(pointer); }
+            @Override public void dispose(long pointer) { RtlSdrDevice.this.deInit(pointer); }
+        };
+        this.nativeHandler = session.initialize();
     }
 
     @Override
-    public void openAsync(final SdrTcpArguments sdrTcpArguments) {
-        boolean duplicate;
+    public void openAsync(final SdrTcpArguments args) {
         synchronized (nativeLock) {
-            duplicate = started;
-            if (!duplicate) started = true;
-        }
-        if (duplicate) {
-            Log.appendLine("RtlSdrDevice.openAsync called again; this device is single-use");
-            announceOnClosed(new IllegalStateException("RtlSdrDevice is single-use"));
-            return;
-        }
-
-        new Thread() {
-            @Override
-            public void run() {
-                UsbDeviceConnection connection = null;
-                Throwable error = null;
-                try {
-                    connection = UsbPermissionObtainer.obtainFdFor(context, usbDevice).get();
-                    if (connection == null) throw new RuntimeException("Could not get a connection");
-                    if (closeRequested) {
-                        // close() was called while the USB permission dialog was
-                        // showing; do not open a session that nobody waits for.
-                        Log.appendLine("Close was requested before the session started");
-                    } else {
-                        int fd = connection.getFileDescriptor();
-                        Log.appendLine("Opening fd " + fd);
-                        String path = usbDevice.getDeviceName();
-                        if (!openAsync(nativeHandler, fd, sdrTcpArguments.getGain(), sdrTcpArguments.getSamplerateHz(), sdrTcpArguments.getFrequencyHz(), sdrTcpArguments.getPort(), sdrTcpArguments.getPpm(), sdrTcpArguments.getBiasT(),sdrTcpArguments.getAddress(), path)) {
-                            error = new SdrException(SdrException.EXIT_UNKNOWN);
-                        }
-                    }
-                } catch (Throwable e) {
-                    error = e;
-                } finally {
-                    // libusb_wrap_sys_device() does not own the fd. Close it before
-                    // listeners may start a new session on the same USB device.
-                    if (connection != null) {
-                        connection.close();
-                    }
-                }
-                announceOnClosed(error);
-                dispose();
+            if (started || disposed || closeRequested) {
+                Log.appendLine("RtlSdrDevice is single-use; ignoring duplicate open");
+                return;
             }
-        }.start();
+            started = true;
+            worker = new Thread(() -> runSession(args), "rtl-sdr-open");
+        }
+        worker.start();
+    }
+
+    private void runSession(SdrTcpArguments args) {
+        Future<UsbDeviceConnection> request = null;
+        UsbDeviceConnection connection = null;
+        Throwable error = null;
+        try {
+            if (closeRequested) return;
+            request = permissions.obtain(context, usbDevice);
+            boolean cancel;
+            synchronized (nativeLock) {
+                permissionFuture = request;
+                cancel = closeRequested || disposed;
+            }
+            if (cancel) request.cancel(true);
+            connection = request.get(permissionTimeoutMs, TimeUnit.MILLISECONDS);
+            if (connection == null) throw new IllegalStateException("Could not get a USB connection");
+            if (closeRequested) return;
+            int fd = connection.getFileDescriptor();
+            String path = usbDevice.getDeviceName();
+            boolean enterNative;
+            synchronized (nativeLock) {
+                permissionFuture = null;
+                enterNative = !closeRequested && !disposed;
+                // Linearization point: after this claim, close is an active
+                // native stop request, not a pending-permission cancellation.
+                if (enterNative) nativeStarting = true;
+            }
+            if (enterNative) {
+                Log.appendLine("Opening fd " + fd);
+                if (!session.open(nativeHandler, fd, args, path) && !closeRequested) {
+                    error = new SdrException(SdrException.EXIT_UNKNOWN);
+                }
+            }
+        } catch (CancellationException e) {
+            if (!closeRequested) error = e;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (!closeRequested) error = e;
+        } catch (ExecutionException e) {
+            error = e.getCause();
+        } catch (Throwable e) {
+            error = e;
+        } finally {
+            // A timed out/interrupted waiter must also revoke its callback.
+            try {
+                if (request != null && !request.cancel(false) && connection == null
+                        && request.isDone() && !request.isCancelled()) {
+                    // Completion can win immediately after get times out or is
+                    // interrupted. Reclaim its transferred fd before discarding
+                    // the future; cancellation no longer owns that result.
+                    connection = request.get(0, TimeUnit.NANOSECONDS);
+                }
+            }
+            catch (Throwable e) { if (error == null) error = e; }
+            try {
+                if (connection != null) connection.close();
+            } catch (Throwable e) {
+                if (error == null) error = e;
+            }
+            synchronized (nativeLock) {
+                permissionFuture = null;
+                nativeStarting = false;
+                worker = null;
+            }
+            try { dispose(); }
+            catch (Throwable e) { if (error == null) error = e; }
+            // Release fd/native ownership before a listener starts another session.
+            announceOnClosed(error);
+        }
     }
 
     @Override
     public void close() {
-        closeRequested = true;
+        Future<UsbDeviceConnection> pending;
         synchronized (nativeLock) {
-            if (disposed) return;
+            if (closeRequested) return;
+            closeRequested = true;
+            pending = permissionFuture;
             if (!started) {
-                // The session never started (for example it was superseded in
-                // the service queue): release the native handler right away.
-                disposed = true;
-                deInit(nativeHandler);
-            } else {
-                close(nativeHandler);
+                if (!disposed) { disposed = true; session.dispose(nativeHandler); }
+            } else if (nativeStarting && !disposed) {
+                session.close(nativeHandler);
             }
         }
+        // Never wait/join on the UI thread or call Android receiver cleanup
+        // while holding nativeLock. Cancelling wakes the owned worker's get().
+        if (pending != null) pending.cancel(true);
     }
 
-    /** Releases the native session exactly once, regardless of which thread
-     *  finishes the session first. */
     private void dispose() {
         synchronized (nativeLock) {
             if (disposed) return;
             disposed = true;
-            deInit(nativeHandler);
+            session.dispose(nativeHandler);
         }
     }
 
-    @Override
-    public String getName() {
-        return "rtl-sdr "+usbDevice.getDeviceName();
+    @Override public String getName() { return "rtl-sdr " + usbDevice.getDeviceName(); }
+
+    @Override protected void finalize() throws Throwable {
+        try { super.finalize(); }
+        finally { dispose(); }
     }
 
-    @Override
-    protected void finalize() throws Throwable {
-        super.finalize();
-        dispose();
-    }
-
-    @Override
-    public native int[] getSupportedCommands();
-
+    @Override public native int[] getSupportedCommands();
     private native long initialize();
     private native void close(long pointer);
     private native void deInit(long pointer);
-    private native boolean openAsync(long pointer, int fd, int gain, long samplingrate, long frequency, int port, int ppm, int biast, String address, String devicePath) throws Exception;
+    private native boolean openAsync(long pointer, int fd, int gain, long rate,
+            long frequency, int port, int ppm, int biasT, String address, String path) throws Exception;
 }

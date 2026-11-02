@@ -20,10 +20,6 @@
 
 package com.sdrtouch.tools;
 
-import static android.app.PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT;
-import static android.app.PendingIntent.FLAG_MUTABLE;
-import static android.content.Context.RECEIVER_EXPORTED;
-
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -32,74 +28,134 @@ import android.content.IntentFilter;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.net.Uri;
 import android.os.Build;
 
+import java.util.UUID;
 import java.util.concurrent.Future;
 
 public class UsbPermissionObtainer {
-    private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
+    private static final String ACTION_USB_PERMISSION = "com.sdrtouch.rtlsdr.USB_PERMISSION";
+    private static final String SCHEME = "rtlsdr-permission";
 
-    public static Future<UsbDeviceConnection> obtainFdFor(Context context, UsbDevice usbDevice) {
-        int flags = 0;
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            flags = FLAG_MUTABLE | FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT;
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            flags = FLAG_MUTABLE;
-        }
-        UsbManager manager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-        if (!manager.hasPermission(usbDevice)) {
-            AsyncFuture<UsbDeviceConnection> task = new AsyncFuture<>();
-            registerNewBroadcastReceiver(context, usbDevice, task);
-            manager.requestPermission(usbDevice, PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), flags));
-            return task;
-        } else {
-            return new CompletedFuture<>(manager.openDevice(usbDevice));
-        }
+    public static Future<UsbDeviceConnection> obtainFdFor(Context context, UsbDevice device) {
+        PermissionRequest request = new PermissionRequest(context.getApplicationContext(), device);
+        request.start();
+        return request;
     }
 
-    private static void registerNewBroadcastReceiver(final Context context, final UsbDevice usbDevice, final AsyncFuture<UsbDeviceConnection> task) {
-        BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                String action = intent.getAction();
-                if (ACTION_USB_PERMISSION.equals(action)) {
-                    synchronized (this) {
-                        if (task.isDone()) {
-                            Log.appendLine("Permission already should be processed, ignoring.");
-                            return;
-                        }
-                        UsbManager manager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
-                        UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                        if (device.equals(usbDevice)) {
-                            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                                if (!manager.hasPermission(device)) {
-                                    Log.appendLine("Permissions were granted but can't access the device");
-                                    task.setDone(null);
-                                } else {
-                                    Log.appendLine("Permissions granted and device is accessible");
-                                    task.setDone(manager.openDevice(device));
-                                }
-                            } else {
-                                Log.appendLine("Extra permission was not granted");
-                                task.setDone(null);
-                            }
-                            context.unregisterReceiver(this);
-                        } else {
-                            Log.appendLine("Got a permission for an unexpected device");
-                            task.setDone(null);
-                        }
-                    }
-                } else {
-                    Log.appendLine("Unexpected action");
-                    task.setDone(null);
-                }
+    private static boolean sameDevice(UsbDevice a, UsbDevice b) {
+        return a != null && b != null && a.getDeviceId() == b.getDeviceId()
+                && a.getVendorId() == b.getVendorId() && a.getProductId() == b.getProductId()
+                && a.getDeviceName().equals(b.getDeviceName());
+    }
+
+    private static final class PermissionRequest extends AsyncFuture<UsbDeviceConnection> {
+        private final Object lifecycle = new Object();
+        private final Context context;
+        private final UsbManager manager;
+        private final UsbDevice device;
+        private final Uri callback = Uri.parse(SCHEME + ":" + UUID.randomUUID());
+        private PendingIntent pendingIntent;
+        private boolean permissionRegistered;
+        private boolean detachRegistered;
+        private boolean cleaned;
+
+        private final BroadcastReceiver permissionReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context ignored, Intent intent) {
+                if (intent == null || !ACTION_USB_PERMISSION.equals(intent.getAction())
+                        || !callback.equals(intent.getData())
+                        || !sameDevice(device, intent.getParcelableExtra(UsbManager.EXTRA_DEVICE))) return;
+                if (isDone()) { cleanup(); return; }
+                finishOpen();
             }
         };
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(broadcastReceiver, new IntentFilter(ACTION_USB_PERMISSION), RECEIVER_EXPORTED);
-        } else {
-            context.registerReceiver(broadcastReceiver, new IntentFilter(ACTION_USB_PERMISSION));
+        private final BroadcastReceiver detachReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context ignored, Intent intent) {
+                if (intent != null && UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())
+                        && sameDevice(device, intent.getParcelableExtra(UsbManager.EXTRA_DEVICE))) cancel(false);
+            }
+        };
+
+        PermissionRequest(Context context, UsbDevice device) {
+            this.context = context;
+            this.device = device;
+            this.manager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+        }
+
+        void start() {
+            synchronized (lifecycle) {
+                if (isDone()) return;
+                try {
+                    if (!isPresent()) { cancel(false); return; }
+                    if (manager.hasPermission(device)) { finishOpen(); return; }
+                    IntentFilter permissionFilter = new IntentFilter(ACTION_USB_PERMISSION);
+                    permissionFilter.addDataScheme(SCHEME);
+                    register(permissionReceiver, permissionFilter);
+                    permissionRegistered = true;
+                    register(detachReceiver, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
+                    detachRegistered = true;
+                    // Immutable callback already carries its identity. USB framework
+                    // fill-in extras are deliberately unnecessary: recheck the live
+                    // permission and device instead of trusting a grant boolean.
+                    Intent intent = new Intent(ACTION_USB_PERMISSION).setPackage(context.getPackageName())
+                            .setData(callback).putExtra(UsbManager.EXTRA_DEVICE, device);
+                    pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+                    if (!isDone()) manager.requestPermission(device, pendingIntent);
+                } catch (RuntimeException error) {
+                    trySetException(error);
+                    cleanup();
+                }
+            }
+        }
+
+        private void register(BroadcastReceiver receiver, IntentFilter filter) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                context.registerReceiver(receiver, filter);
+            }
+        }
+
+        private boolean isPresent() {
+            return sameDevice(device, manager.getDeviceList().get(device.getDeviceName()));
+        }
+
+        private void finishOpen() {
+            UsbDeviceConnection connection = null;
+            try {
+                if (isDone()) return;
+                if (isPresent() && manager.hasPermission(device)) connection = manager.openDevice(device);
+                // Cancellation may have won while openDevice was returning. A
+                // rejected result is never published and is closed by this owner.
+                if (trySetDone(connection)) connection = null;
+            } catch (RuntimeException error) {
+                trySetException(error);
+            } finally {
+                try { if (connection != null) connection.close(); }
+                finally { cleanup(); }
+            }
+        }
+
+        @Override public boolean cancel(boolean mayInterruptIfRunning) {
+            synchronized (lifecycle) { return super.cancel(mayInterruptIfRunning); }
+        }
+
+        @Override protected void onCancelled() { cleanup(); }
+
+        private void cleanup() {
+            synchronized (lifecycle) {
+                if (cleaned) return;
+                cleaned = true;
+                if (permissionRegistered) unregister(permissionReceiver);
+                if (detachRegistered) unregister(detachReceiver);
+                if (pendingIntent != null) pendingIntent.cancel();
+            }
+        }
+
+        private void unregister(BroadcastReceiver receiver) {
+            try { context.unregisterReceiver(receiver); }
+            catch (IllegalArgumentException ignored) { /* Already removed by the framework. */ }
         }
     }
 

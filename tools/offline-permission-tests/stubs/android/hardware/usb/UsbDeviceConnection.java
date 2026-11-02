@@ -1,0 +1,1 @@
+package android.hardware.usb;import java.util.concurrent.atomic.*;public class UsbDeviceConnection {public final AtomicInteger closes=new AtomicInteger();public Runnable fdHook;public RuntimeException closeError;public int getFileDescriptor(){if(fdHook!=null)fdHook.run();return 42;}public void close(){closes.incrementAndGet();if(closeError!=null)throw closeError;}}
